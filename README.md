@@ -20,7 +20,10 @@ npx prisma migrate deploy
 ```
 
 環境変数は `.env` に設定してください。テンプレートとして [.env.example](.env.example) を用意しています。上記の `prisma migrate deploy` は
-Supabase（Postgres）にテーブルを作成するので、`DATABASE_URL` を適切に設定してから実行してください。
+Supabase（Postgres）にテーブルを作成するので、`DATABASE_URL` / `DIRECT_URL` を適切に設定してから実行してください。
+Prisma のデータソースには `directUrl` を指定しており、実行時は `DATABASE_URL`（コネクションプール経由）を使用しながら、
+マイグレーション時は `DIRECT_URL`（5432 のメイン接続）を利用します。Supabase のダッシュボードでそれぞれの接続文字列を取得し、
+環境変数へ設定してください。
 
 Supabase / Stripe / NextAuth など外部サービスの接続情報はダミー値のままでは動作しないため、開発環境ごとに適切な値へ置き換えてください。
 

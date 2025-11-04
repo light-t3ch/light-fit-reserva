@@ -16,9 +16,11 @@
 ```bash
 npm install
 npm run prisma:generate
+npx prisma migrate deploy
 ```
 
-環境変数は `.env` に設定してください。テンプレートとして [.env.example](.env.example) を用意しています。
+環境変数は `.env` に設定してください。テンプレートとして [.env.example](.env.example) を用意しています。上記の `prisma migrate deploy` は
+Supabase（Postgres）にテーブルを作成するので、`DATABASE_URL` を適切に設定してから実行してください。
 
 Supabase / Stripe / NextAuth など外部サービスの接続情報はダミー値のままでは動作しないため、開発環境ごとに適切な値へ置き換えてください。
 
@@ -36,8 +38,8 @@ npm run dev
 ## Prisma スキーマ
 
 `prisma/schema.prisma` にはテナント・店舗・トレーナー・顧客・プラン・サブスク・クレジット台帳・予約・シフトなど、
-要件に基づくエンティティとリレーションを定義しています。`npm run prisma:generate` で Prisma Client を生成し、
-`npm run prisma:migrate -- --name init` で初回マイグレーションを作成できます。
+要件に基づくエンティティとリレーションを定義しています。`prisma/migrations/20231104_init` に初期テーブル作成用の SQL を
+コミットしているので、`npx prisma migrate deploy` を実行すれば本番環境でも同じ構造を適用できます。
 
 ## Lint / ビルド
 

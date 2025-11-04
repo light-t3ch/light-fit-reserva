@@ -1,5 +1,7 @@
 import { addDays, addMinutes, addMonths, endOfMonth, set, startOfDay, startOfMonth } from "date-fns";
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 const TRAINER_SEEDS = [
@@ -440,7 +442,7 @@ async function ensureLedgerEntries(
   const now = new Date();
   const nextMonthStart = addMonths(currentPeriodStart, 1);
 
-  const entries = [] as Parameters<typeof prisma.creditLedgerEntry.createMany>[0]["data"];
+  const entries: Prisma.CreditLedgerEntryCreateManyInput[] = [];
 
   for (const purchase of purchases) {
     const planSlug = purchase.planSlug;

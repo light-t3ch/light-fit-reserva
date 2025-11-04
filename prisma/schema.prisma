@@ -60,20 +60,24 @@ enum BookingStatus {
 }
 
 model Tenant {
-  id           String     @id @default(cuid())
-  name         String
-  slug         String     @unique
-  email        String?
-  phone        String?
-  locations    Location[]
-  trainers     Trainer[]
-  customers    Customer[]
-  plans        Plan[]
-  bookings     Booking[]
-  bookingLocks BookingLock[]
-  scheduleClosures ScheduleClosure[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                String     @id @default(cuid())
+  name              String
+  slug              String     @unique
+  email             String?
+  phone             String?
+  users             User[]
+  locations         Location[]
+  trainers          Trainer[]
+  trainerShifts     TrainerShift[]
+  customers         Customer[]
+  plans             Plan[]
+  planPurchases     PlanPurchase[]
+  creditLedgerEntries CreditLedgerEntry[]
+  bookings          Booking[]
+  bookingLocks      BookingLock[]
+  scheduleClosures  ScheduleClosure[]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
 
 model Location {
@@ -85,6 +89,7 @@ model Location {
   isActive  Boolean   @default(true)
   tenant    Tenant    @relation(fields: [tenantId], references: [id])
   trainers  Trainer[]
+  trainerShifts TrainerShift[]
   bookings  Booking[]
   closures  ScheduleClosure[]
   createdAt DateTime  @default(now())

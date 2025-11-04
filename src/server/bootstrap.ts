@@ -171,7 +171,9 @@ async function ensurePlans(tenantId: string) {
             bucket: allocation.bucket,
             creditType: allocation.creditType,
             quantity: allocation.quantity,
-            effectiveDay: allocation.effectiveDay,
+            ...(allocation.effectiveDay !== undefined
+              ? { effectiveDay: allocation.effectiveDay }
+              : {}),
           })),
         },
       },

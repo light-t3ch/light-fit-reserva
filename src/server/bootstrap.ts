@@ -167,14 +167,19 @@ async function ensurePlans(tenantId: string) {
         baseCredits: seed.baseCredits,
         stripePriceId: seed.stripePriceId,
         allocations: {
-          create: seed.allocations.map((allocation) => ({
-            bucket: allocation.bucket,
-            creditType: allocation.creditType,
-            quantity: allocation.quantity,
-            ...(allocation.effectiveDay !== undefined
-              ? { effectiveDay: allocation.effectiveDay }
-              : {}),
-          })),
+          create: seed.allocations.map((allocation) => {
+            const baseAllocation = {
+              bucket: allocation.bucket,
+              creditType: allocation.creditType,
+              quantity: allocation.quantity,
+            };
+
+            if ("effectiveDay" in allocation && allocation.effectiveDay !== undefined) {
+              return { ...baseAllocation, effectiveDay: allocation.effectiveDay };
+            }
+
+            return baseAllocation;
+          }),
         },
       },
     });

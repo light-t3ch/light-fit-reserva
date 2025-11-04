@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { SignInForm } from "@/components/auth/sign-in-form";
 
 export default function SignInPage() {
@@ -8,7 +10,13 @@ export default function SignInPage() {
         <p className="mt-2 text-sm text-slate-600">
           デモ環境では管理者・お客様どちらのログイン方法も選択できます。メールアドレスとパスワードはそれぞれ共有された値、または画面のヒントをご利用ください。
         </p>
-        <SignInForm />
+        <Suspense
+          fallback={
+            <div className="mt-8 text-sm text-slate-600">読み込み中...</div>
+          }
+        >
+          <SignInForm />
+        </Suspense>
       </div>
     </main>
   );

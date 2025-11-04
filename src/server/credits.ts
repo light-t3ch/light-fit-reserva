@@ -1,3 +1,7 @@
+import { endOfMonth, startOfMonth } from "date-fns";
+
+import { prisma } from "@/lib/prisma";
+
 export type CreditBucket = "CURRENT" | "NEXT";
 
 export type CreditSummary = {
@@ -9,27 +13,59 @@ export type CreditSummary = {
 };
 
 export async function getCustomerCreditSummary(userId: string): Promise<CreditSummary[]> {
-  return [
-    {
-      bucket: "CURRENT",
-      creditType: "PT_55",
-      remaining: 2,
-      consumedThisMonth: 2,
-      rolloverEligible: false,
+  const customer = await prisma.customer.findFirst({
+    where: { userId },
+    select: { id: true, tenantId: true },
+  });
+
+  if (!customer) {
+    return [];
+  }
+
+  const entries = await prisma.creditLedgerEntry.findMany({
+    where: {
+      customerId: customer.id,
+      tenantId: customer.tenantId,
     },
-    {
-      bucket: "NEXT",
-      creditType: "PT_55",
-      remaining: 4,
+    orderBy: { occurredAt: "asc" },
+  });
+
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const currentMonthStart = startOfMonth(new Date());
+  const currentMonthEnd = endOfMonth(new Date());
+
+  const summaries = new Map<string, CreditSummary>();
+
+  for (const entry of entries) {
+    const key = `${entry.bucket}_${entry.creditType}`;
+    const baseSummary = summaries.get(key) ?? {
+      bucket: entry.bucket as CreditBucket,
+      creditType: entry.creditType as CreditSummary["creditType"],
+      remaining: 0,
       consumedThisMonth: 0,
-      rolloverEligible: false,
-    },
-    {
-      bucket: "CURRENT",
-      creditType: "PT_25",
-      remaining: 1,
-      consumedThisMonth: 3,
-      rolloverEligible: false,
-    },
-  ];
+      rolloverEligible: entry.bucket === "NEXT",
+    };
+
+    baseSummary.remaining += entry.quantity;
+
+    if (
+      entry.eventType === "BOOKING_CONSUME" &&
+      entry.occurredAt >= currentMonthStart &&
+      entry.occurredAt <= currentMonthEnd
+    ) {
+      baseSummary.consumedThisMonth += Math.abs(entry.quantity);
+    }
+
+    summaries.set(key, baseSummary);
+  }
+
+  return Array.from(summaries.values()).sort((a, b) => {
+    if (a.creditType === b.creditType) {
+      return a.bucket.localeCompare(b.bucket);
+    }
+    return a.creditType.localeCompare(b.creditType);
+  });
 }

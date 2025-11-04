@@ -8,6 +8,15 @@ const currencyFormatter = new Intl.NumberFormat("ja-JP", {
 export async function RevenueBreakdown({ tenantId }: { tenantId?: string } = {}) {
   const revenue = await getRevenueBreakdown(tenantId ?? "demo-tenant");
 
+  if (revenue.length === 0) {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">売上サマリー</h2>
+        <p className="mt-4">まだ売上データがありません。プラン購入が記録されるとこちらに表示されます。</p>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">売上サマリー</h2>

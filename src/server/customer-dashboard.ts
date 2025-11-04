@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 export type CustomerUpcomingSession = {
   id: string;
   trainerName: string;
@@ -7,26 +9,54 @@ export type CustomerUpcomingSession = {
   status: "BOOKED" | "PENDING" | "COMPLETED" | "CANCELLED";
 };
 
+const UPCOMING_STATUSES = ["BOOKED", "PENDING_PAYMENT"] as const;
+
 export async function getCustomerUpcomingSessions(
   userId: string,
 ): Promise<CustomerUpcomingSession[]> {
-  const base = Date.now();
-  return [
-    {
-      id: `${userId}-session-1`,
-      trainerName: "山田 太郎",
-      locationName: "阿波座店",
-      menu: "55分パーソナルトレーニング",
-      start: new Date(base + 1000 * 60 * 60 * 24).toISOString(),
-      status: "BOOKED",
+  const customer = await prisma.customer.findFirst({
+    where: { userId },
+    select: { id: true, tenantId: true },
+  });
+
+  if (!customer) {
+    return [];
+  }
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      customerId: customer.id,
+      tenantId: customer.tenantId,
+      status: { in: [...UPCOMING_STATUSES] },
+      startsAt: {
+        gte: new Date(),
+      },
     },
-    {
-      id: `${userId}-session-2`,
-      trainerName: "佐藤 花子",
-      locationName: "本町店",
-      menu: "25分パーソナルトレーニング",
-      start: new Date(base + 1000 * 60 * 60 * 24 * 3).toISOString(),
-      status: "PENDING",
+    include: {
+      trainer: { select: { name: true } },
+      location: { select: { name: true } },
+      planPurchase: {
+        select: {
+          plan: { select: { name: true, sessionCategory: true } },
+        },
+      },
     },
-  ];
+    orderBy: { startsAt: "asc" },
+    take: 6,
+  });
+
+  return bookings.map((booking) => ({
+    id: booking.id,
+    trainerName: booking.trainer?.name ?? "指名なし",
+    locationName: booking.location?.name ?? "店舗未設定",
+    menu:
+      booking.planPurchase?.plan?.name ??
+      (booking.creditType === "PT_55"
+        ? "55分パーソナルトレーニング"
+        : booking.creditType === "PT_25"
+          ? "25分パーソナルトレーニング"
+          : "予約"),
+    start: booking.startsAt.toISOString(),
+    status: booking.status === "PENDING_PAYMENT" ? "PENDING" : "BOOKED",
+  }));
 }

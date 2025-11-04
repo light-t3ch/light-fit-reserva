@@ -5,6 +5,15 @@ import { ja } from "date-fns/locale";
 export async function UpcomingBookings({ tenantId }: { tenantId?: string } = {}) {
   const bookings = await getUpcomingBookings(tenantId ?? "demo-tenant");
 
+  if (bookings.length === 0) {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">本日の予約</h2>
+        <p className="mt-4">本日の予約はまだありません。</p>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">本日の予約</h2>

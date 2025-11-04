@@ -1,4 +1,7 @@
-import { addMinutes, formatISO, set } from "date-fns";
+import { addDays, formatISO } from "date-fns";
+
+import { prisma } from "@/lib/prisma";
+import { generateShiftSlots } from "@/server/bootstrap";
 
 export type TrainerAvailabilitySlot = {
   slotId: string;
@@ -16,34 +19,101 @@ export type TrainerAvailability = {
   slots: TrainerAvailabilitySlot[];
 };
 
-export async function getTenantAvailability(tenantId: string): Promise<TrainerAvailability[]> {
-  const baseDate = set(new Date(), { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
-  const trainers = [
-    { id: "trainer_1", name: "山田 太郎", location: "本町店" },
-    { id: "trainer_2", name: "佐藤 花子", location: "阿波座店" },
-  ];
+const BOOKED_STATUSES = ["BOOKED", "PENDING_PAYMENT", "CHECKED_IN"] as const;
 
-  return trainers.map((trainer, idx) => {
-    const firstSlotStart = addMinutes(baseDate, idx * 60);
-    const slots: TrainerAvailabilitySlot[] = Array.from({ length: 6 }).map((_, slotIdx) => {
-      const start = addMinutes(firstSlotStart, slotIdx * 60);
-      const durationMinutes = slotIdx % 2 === 0 ? 55 : 25;
-      const bookingType = durationMinutes === 55 ? "PT_55" : "PT_25";
-      const end = addMinutes(start, durationMinutes);
-      return {
-        slotId: `${trainer.id}_${formatISO(start)}`,
-        start: start.toISOString(),
-        end: end.toISOString(),
-        durationMinutes,
-        bookingType,
-        isBookable: slotIdx !== 2,
-      } satisfies TrainerAvailabilitySlot;
-    });
+function overlaps(
+  slotStart: Date,
+  slotEnd: Date,
+  booking: { startsAt: Date; endsAt: Date },
+) {
+  return slotStart < booking.endsAt && slotEnd > booking.startsAt;
+}
+
+export async function getTenantAvailability(tenantId: string): Promise<TrainerAvailability[]> {
+  const now = new Date();
+  const shifts = await prisma.trainerShift.findMany({
+    where: {
+      tenantId,
+      endsAt: {
+        gte: now,
+      },
+      startsAt: {
+        lte: addDays(now, 7),
+      },
+    },
+    include: {
+      trainer: {
+        select: { id: true, name: true },
+      },
+      location: {
+        select: { id: true, name: true },
+      },
+    },
+    orderBy: { startsAt: "asc" },
+    take: 12,
+  });
+
+  if (shifts.length === 0) {
+    return [];
+  }
+
+  const trainerIds = Array.from(new Set(shifts.map((shift) => shift.trainerId)));
+  const shiftWindowEnd = shifts.reduce(
+    (latest, shift) => (shift.endsAt > latest ? shift.endsAt : latest),
+    shifts[0].endsAt,
+  );
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      tenantId,
+      trainerId: { in: trainerIds },
+      status: { in: [...BOOKED_STATUSES] },
+      startsAt: {
+        gte: now,
+        lte: shiftWindowEnd,
+      },
+    },
+    select: {
+      id: true,
+      trainerId: true,
+      startsAt: true,
+      endsAt: true,
+    },
+  });
+
+  type BookingForShift = (typeof bookings)[number];
+
+  const bookingsByTrainer = bookings.reduce<Record<string, BookingForShift[]>>((acc, booking) => {
+    if (!booking.trainerId) {
+      return acc;
+    }
+    const list = acc[booking.trainerId] ?? [];
+    list.push(booking);
+    acc[booking.trainerId] = list;
+    return acc;
+  }, {});
+
+  return shifts.map((shift) => {
+    const trainerBookings = bookingsByTrainer[shift.trainerId] ?? [];
+    const slots = generateShiftSlots(shift.startsAt, shift.endsAt)
+      .filter((slot) => slot.end > now)
+      .map((slot) => {
+        const isBookable = trainerBookings.every((booking) => !overlaps(slot.start, slot.end, booking));
+
+        return {
+          slotId: `${shift.trainerId}_${formatISO(slot.start)}`,
+          start: slot.start.toISOString(),
+          end: slot.end.toISOString(),
+          durationMinutes: slot.duration,
+          bookingType: slot.creditType,
+          isBookable,
+        } satisfies TrainerAvailabilitySlot;
+      });
 
     return {
-      trainerId: trainer.id,
-      trainerName: trainer.name,
-      locationName: trainer.location,
+      trainerId: shift.trainer.id,
+      trainerName: shift.trainer.name,
+      locationName: shift.location.name,
       slots,
     } satisfies TrainerAvailability;
   });

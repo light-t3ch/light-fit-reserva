@@ -1,3 +1,7 @@
+import { endOfDay, startOfDay, startOfMonth, subMonths } from "date-fns";
+
+import { prisma } from "@/lib/prisma";
+
 export type RevenueItem = {
   label: string;
   amount: number;
@@ -14,33 +18,142 @@ export type UpcomingBooking = {
   status: "BOOKED" | "CHECKED_IN" | "COMPLETED" | "CANCELLED";
 };
 
+function extractAmount(metadata: unknown): number {
+  if (typeof metadata !== "object" || metadata === null) {
+    return 0;
+  }
+  if ("amount" in metadata) {
+    const value = Number((metadata as { amount?: unknown }).amount);
+    return Number.isFinite(value) ? value : 0;
+  }
+  return 0;
+}
+
+function calculateDelta(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? 0 : 100;
+  }
+  return ((current - previous) / previous) * 100;
+}
+
 export async function getRevenueBreakdown(tenantId: string): Promise<RevenueItem[]> {
+  const now = new Date();
+  const currentMonthStart = startOfMonth(now);
+  const previousMonthStart = subMonths(currentMonthStart, 1);
+  const purchases = await prisma.planPurchase.findMany({
+    where: {
+      tenantId,
+      OR: [
+        { currentPeriodStart: { gte: previousMonthStart } },
+        { createdAt: { gte: previousMonthStart } },
+      ],
+    },
+    include: {
+      plan: { select: { category: true } },
+    },
+  });
+
+  const aggregate = purchases.reduce(
+    (acc, purchase) => {
+      const amount = extractAmount(purchase.metadata ?? undefined);
+      const periodStart = purchase.currentPeriodStart ?? purchase.createdAt;
+      const isCurrentMonth = periodStart >= currentMonthStart;
+      const isPreviousMonth = periodStart >= previousMonthStart && periodStart < currentMonthStart;
+
+      if (isCurrentMonth) {
+        acc.current.total += amount;
+        if (purchase.plan?.category === "SUBSCRIPTION") {
+          acc.current.subscription += amount;
+        } else {
+          acc.current.other += amount;
+        }
+      }
+
+      if (isPreviousMonth) {
+        acc.previous.total += amount;
+        if (purchase.plan?.category === "SUBSCRIPTION") {
+          acc.previous.subscription += amount;
+        } else {
+          acc.previous.other += amount;
+        }
+      }
+
+      return acc;
+    },
+    {
+      current: { total: 0, subscription: 0, other: 0 },
+      previous: { total: 0, subscription: 0, other: 0 },
+    },
+  );
+
   return [
-    { label: "今月の売上", amount: 1280000, deltaPercentage: 12.5 },
-    { label: "サブスク", amount: 960000, deltaPercentage: 8.1 },
-    { label: "都度利用", amount: 320000, deltaPercentage: 25.4 },
+    {
+      label: "今月の売上",
+      amount: aggregate.current.total,
+      deltaPercentage: calculateDelta(aggregate.current.total, aggregate.previous.total),
+    },
+    {
+      label: "サブスク",
+      amount: aggregate.current.subscription,
+      deltaPercentage: calculateDelta(
+        aggregate.current.subscription,
+        aggregate.previous.subscription,
+      ),
+    },
+    {
+      label: "都度利用",
+      amount: aggregate.current.other,
+      deltaPercentage: calculateDelta(aggregate.current.other, aggregate.previous.other),
+    },
   ];
 }
 
 export async function getUpcomingBookings(tenantId: string): Promise<UpcomingBooking[]> {
-  return [
-    {
-      id: "booking_1",
-      customerName: "田中 実",
-      trainerName: "山田 太郎",
-      locationName: "本町店",
-      menu: "55分パーソナルトレーニング",
-      start: new Date().toISOString(),
-      status: "BOOKED",
+  const start = startOfDay(new Date());
+  const end = endOfDay(new Date());
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      tenantId,
+      status: { in: ["BOOKED", "CHECKED_IN"] },
+      startsAt: {
+        gte: start,
+        lte: end,
+      },
     },
-    {
-      id: "booking_2",
-      customerName: "鈴木 詩織",
-      trainerName: "佐藤 花子",
-      locationName: "阿波座店",
-      menu: "25分パーソナルトレーニング",
-      start: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
-      status: "BOOKED",
+    include: {
+      customer: { select: { firstName: true, lastName: true } },
+      trainer: { select: { name: true } },
+      location: { select: { name: true } },
+      planPurchase: {
+        select: {
+          plan: { select: { name: true } },
+        },
+      },
     },
-  ];
+    orderBy: { startsAt: "asc" },
+  });
+
+  return bookings.map((booking) => {
+    const customerName = [booking.customer?.lastName, booking.customer?.firstName]
+      .filter((value): value is string => Boolean(value && value.trim().length > 0))
+      .join(" ") || "顧客";
+
+    const fallbackMenu =
+      booking.creditType === "PT_55"
+        ? "55分パーソナルトレーニング"
+        : booking.creditType === "PT_25"
+          ? "25分パーソナルトレーニング"
+          : "セッション";
+
+    return {
+      id: booking.id,
+      customerName,
+      trainerName: booking.trainer?.name ?? "指名なし",
+      locationName: booking.location?.name ?? "店舗未設定",
+      menu: booking.planPurchase?.plan?.name ?? fallbackMenu,
+      start: booking.startsAt.toISOString(),
+      status: booking.status,
+    } satisfies UpcomingBooking;
+  });
 }

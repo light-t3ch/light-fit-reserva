@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { ensureDemoTenantData } from "@/server/bootstrap";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -62,6 +63,8 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
+          await ensureDemoTenantData(tenant.id);
+
           return {
             id: user.id,
             email: user.email ?? undefined,
@@ -109,6 +112,8 @@ export const authOptions: NextAuthOptions = {
             email: user.email ?? undefined,
           },
         });
+
+        await ensureDemoTenantData(tenant.id);
 
         return {
           id: user.id,

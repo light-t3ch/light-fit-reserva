@@ -13,7 +13,7 @@ const credentialsSchema = z.object({
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
   providers: [
     Credentials({
@@ -70,11 +70,34 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.tenantId = user.tenantId ?? null;
+      }
+
+      if ((!token.role || !("tenantId" in token)) && token.sub) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { id: true, role: true, tenantId: true },
+        });
+
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+          token.tenantId = dbUser.tenantId ?? null;
+        }
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.role = user.role;
-        session.user.tenantId = user.tenantId ?? null;
+        session.user.id = (token.id as string) ?? token.sub ?? "";
+        session.user.role = (token.role as string) ?? "";
+        session.user.tenantId =
+          (token.tenantId as string | null | undefined) ?? null;
       }
       return session;
     },

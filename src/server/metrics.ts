@@ -1,6 +1,7 @@
 import { endOfDay, startOfDay, startOfMonth, subMonths } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
+import type { BookingStatus as PrismaBookingStatus } from "@prisma/client";
 
 export type RevenueItem = {
   label: string;
@@ -108,6 +109,17 @@ export async function getRevenueBreakdown(tenantId: string): Promise<RevenueItem
   ];
 }
 
+function isUpcomingBookingStatus(
+  status: PrismaBookingStatus,
+): status is UpcomingBooking["status"] {
+  return (
+    status === "BOOKED" ||
+    status === "CHECKED_IN" ||
+    status === "COMPLETED" ||
+    status === "CANCELLED"
+  );
+}
+
 export async function getUpcomingBookings(tenantId: string): Promise<UpcomingBooking[]> {
   const start = startOfDay(new Date());
   const end = endOfDay(new Date());
@@ -153,7 +165,7 @@ export async function getUpcomingBookings(tenantId: string): Promise<UpcomingBoo
       locationName: booking.location?.name ?? "店舗未設定",
       menu: booking.planPurchase?.plan?.name ?? fallbackMenu,
       start: booking.startsAt.toISOString(),
-      status: booking.status,
+      status: isUpcomingBookingStatus(booking.status) ? booking.status : "BOOKED",
     } satisfies UpcomingBooking;
   });
 }

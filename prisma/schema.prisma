@@ -70,6 +70,7 @@ model Tenant {
   customers    Customer[]
   plans        Plan[]
   bookings     Booking[]
+  bookingLocks BookingLock[]
   scheduleClosures ScheduleClosure[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -110,7 +111,7 @@ model User {
 model Trainer {
   id         String    @id @default(cuid())
   tenantId   String
-  userId     String?
+  userId     String?   @unique
   locationId String?
   name       String
   email      String?
@@ -144,7 +145,7 @@ model TrainerShift {
 model Customer {
   id               String          @id @default(cuid())
   tenantId         String
-  userId           String?
+  userId           String?         @unique
   supabaseId       String?         @unique
   stripeCustomerId String?         @unique
   firstName        String
@@ -214,6 +215,7 @@ model PlanPurchase {
   customer             Customer              @relation(fields: [customerId], references: [id])
   plan                 Plan                  @relation(fields: [planId], references: [id])
   ledgerEntries        CreditLedgerEntry[]
+  bookings             Booking[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -263,6 +265,7 @@ model Booking {
   trainer            Trainer?         @relation(fields: [trainerId], references: [id])
   customer           Customer         @relation(fields: [customerId], references: [id])
   planPurchase       PlanPurchase?    @relation(fields: [planPurchaseId], references: [id])
+  lock               BookingLock?     @relation("BookingLockToBooking")
   ledgerEntries      CreditLedgerEntry[]
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -279,7 +282,7 @@ model BookingLock {
   lockedAt   DateTime  @default(now())
   expiresAt  DateTime
   tenant     Tenant    @relation(fields: [tenantId], references: [id])
-  booking    Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking    Booking   @relation("BookingLockToBooking", fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@unique([bookingId])
 }

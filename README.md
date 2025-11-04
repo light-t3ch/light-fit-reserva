@@ -56,9 +56,13 @@ npm run build
 
 ## デモログイン
 
-NextAuth にはデモ用の Credentials Provider を設定しています。`.env` の `DEMO_TENANT_EMAIL` / `DEMO_TENANT_PASSWORD`
-を使って `/auth/sign-in` からログインすると、Prisma 経由でテナント・ユーザーが自動作成され、
-セッション情報に `tenantId` と `role` が付与されます。
+NextAuth にはデモ用の Credentials Provider を設定しています。
+
+- 管理者ログイン: `.env` に設定した `DEMO_TENANT_EMAIL` / `DEMO_TENANT_PASSWORD`
+- お客様ログイン: `.env` に設定した `DEMO_CUSTOMER_EMAIL` / `DEMO_CUSTOMER_PASSWORD`
+
+`/auth/sign-in` からログインすると、選択したロールに応じて Prisma 経由でテナント・ユーザー・お客様レコード
+（CUSTOMER ロールのみ）が自動作成され、セッション情報に `tenantId` と `role` が付与されます。
 
 ## 次のステップ
 

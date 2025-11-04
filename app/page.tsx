@@ -17,7 +17,13 @@ export default function HomePage() {
               href="/auth/sign-in"
               className="rounded-md bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-500"
             >
-              ログイン
+              管理者ログイン
+            </Link>
+            <Link
+              href={{ pathname: "/auth/sign-in", query: { audience: "customer" } }}
+              className="rounded-md border border-brand-200 px-6 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+            >
+              お客様ログイン
             </Link>
             <Link
               href="/bookings"

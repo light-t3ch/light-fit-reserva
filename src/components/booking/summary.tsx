@@ -7,8 +7,8 @@ const CREDIT_LABELS: Record<string, string> = {
   TRIAL: "体験トレーニング",
 };
 
-export async function BookingSummary() {
-  const credits = await getCustomerCreditSummary("demo-user");
+export async function BookingSummary({ userId }: { userId?: string } = {}) {
+  const credits = await getCustomerCreditSummary(userId ?? "demo-user");
 
   const grouped = credits.reduce<Record<string, typeof credits[number][]>>((acc, credit) => {
     const key = credit.creditType;

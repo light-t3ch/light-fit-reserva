@@ -5,8 +5,8 @@ const currencyFormatter = new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 });
 
-export async function RevenueBreakdown() {
-  const revenue = await getRevenueBreakdown("demo-tenant");
+export async function RevenueBreakdown({ tenantId }: { tenantId?: string } = {}) {
+  const revenue = await getRevenueBreakdown(tenantId ?? "demo-tenant");
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -2,8 +2,8 @@ import { getUpcomingBookings } from "@/server/metrics";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-export async function UpcomingBookings() {
-  const bookings = await getUpcomingBookings("demo-tenant");
+export async function UpcomingBookings({ tenantId }: { tenantId?: string } = {}) {
+  const bookings = await getUpcomingBookings(tenantId ?? "demo-tenant");
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

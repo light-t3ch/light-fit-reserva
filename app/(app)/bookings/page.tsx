@@ -1,8 +1,19 @@
 import { Suspense } from "react";
 import { BookingCalendar } from "@/components/booking/calendar";
 import { BookingSummary } from "@/components/booking/summary";
+import { getServerAuthSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function BookingPage() {
+export default async function BookingPage() {
+  const session = await getServerAuthSession();
+
+  if (!session?.user) {
+    redirect("/auth/sign-in");
+  }
+
+  const tenantId = session.user.tenantId ?? "demo-tenant";
+  const userId = session.user.id ?? "demo-user";
+
   return (
     <main className="mx-auto grid max-w-6xl gap-8 px-6 py-12 lg:grid-cols-[2fr_1fr]">
       <section className="space-y-6">
@@ -13,12 +24,12 @@ export default function BookingPage() {
           </p>
         </header>
         <Suspense fallback={<div className="rounded-xl bg-white p-8 shadow">読み込み中...</div>}>
-          <BookingCalendar />
+          <BookingCalendar tenantId={tenantId} />
         </Suspense>
       </section>
       <aside className="space-y-6">
         <Suspense fallback={<div className="rounded-xl bg-white p-6 shadow">読み込み中...</div>}>
-          <BookingSummary />
+          <BookingSummary userId={userId} />
         </Suspense>
       </aside>
     </main>

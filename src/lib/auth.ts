@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(4),
+  audience: z.enum(["ADMIN", "CUSTOMER"]).default("ADMIN"),
 });
 
 export const authOptions: NextAuthOptions = {
@@ -28,14 +29,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const { email, password } = parsed.data;
-        const demoEmail = process.env.DEMO_TENANT_EMAIL ?? "tenant-admin@example.com";
-        const demoPassword = process.env.DEMO_TENANT_PASSWORD ?? "change-me";
-
-        if (email !== demoEmail || password !== demoPassword) {
-          return null;
-        }
-
+        const { email, password, audience } = parsed.data;
         const tenantSlug = process.env.APP_TENANT_SLUG ?? "light-fit";
         const tenant = await prisma.tenant.upsert({
           where: { slug: tenantSlug },
@@ -46,16 +40,73 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
+        if (audience === "ADMIN") {
+          const demoEmail = process.env.DEMO_TENANT_EMAIL ?? "tenant-admin@example.com";
+          const demoPassword = process.env.DEMO_TENANT_PASSWORD ?? "change-me";
+
+          if (email !== demoEmail || password !== demoPassword) {
+            return null;
+          }
+
+          const user = await prisma.user.upsert({
+            where: { email },
+            update: {
+              tenantId: tenant.id,
+              role: "TENANT_ADMIN",
+            },
+            create: {
+              email,
+              name: "Tenant Admin",
+              role: "TENANT_ADMIN",
+              tenantId: tenant.id,
+            },
+          });
+
+          return {
+            id: user.id,
+            email: user.email ?? undefined,
+            name: user.name ?? undefined,
+            role: user.role,
+            tenantId: user.tenantId ?? null,
+          };
+        }
+
+        const customerEmail = process.env.DEMO_CUSTOMER_EMAIL ?? "customer@example.com";
+        const customerPassword = process.env.DEMO_CUSTOMER_PASSWORD ?? "customer-pass";
+
+        if (email !== customerEmail || password !== customerPassword) {
+          return null;
+        }
+
         const user = await prisma.user.upsert({
           where: { email },
           update: {
             tenantId: tenant.id,
+            role: "CUSTOMER",
           },
           create: {
             email,
-            name: "Tenant Admin",
-            role: "TENANT_ADMIN",
+            name:
+              process.env.DEMO_CUSTOMER_DISPLAY_NAME ??
+              `${process.env.DEMO_CUSTOMER_LAST_NAME ?? "予約"} ${
+                process.env.DEMO_CUSTOMER_FIRST_NAME ?? "太郎"
+              }`,
+            role: "CUSTOMER",
             tenantId: tenant.id,
+          },
+        });
+
+        await prisma.customer.upsert({
+          where: { userId: user.id },
+          update: {
+            email: user.email ?? undefined,
+          },
+          create: {
+            tenantId: tenant.id,
+            userId: user.id,
+            firstName: process.env.DEMO_CUSTOMER_FIRST_NAME ?? "太郎",
+            lastName: process.env.DEMO_CUSTOMER_LAST_NAME ?? "予約",
+            email: user.email ?? undefined,
           },
         });
 

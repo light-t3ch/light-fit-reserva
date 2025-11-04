@@ -1,19 +1,31 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+
+type Audience = "ADMIN" | "CUSTOMER";
 
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audience, setAudience] = useState<Audience>("ADMIN");
+
+  useEffect(() => {
+    const preset = searchParams.get("audience");
+    if (preset?.toLowerCase() === "customer") {
+      setAudience("CUSTOMER");
+    }
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const targetAudience = audience;
 
     setIsSubmitting(true);
     setError(null);
@@ -21,6 +33,7 @@ export function SignInForm() {
     const result = await signIn("credentials", {
       email,
       password,
+      audience: targetAudience,
       redirect: false,
     });
 
@@ -31,11 +44,35 @@ export function SignInForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(targetAudience === "ADMIN" ? "/dashboard" : "/portal");
   }
+
+  const isAdmin = audience === "ADMIN";
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+      <div className="rounded-xl bg-slate-100 p-1 text-sm font-medium text-slate-600">
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() => setAudience("ADMIN")}
+            className={`rounded-lg px-3 py-2 transition ${
+              isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
+            }`}
+          >
+            管理者ログイン
+          </button>
+          <button
+            type="button"
+            onClick={() => setAudience("CUSTOMER")}
+            className={`rounded-lg px-3 py-2 transition ${
+              !isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
+            }`}
+          >
+            お客様ログイン
+          </button>
+        </div>
+      </div>
       <div className="space-y-2">
         <label htmlFor="email" className="block text-sm font-medium text-slate-700">
           メールアドレス
@@ -46,7 +83,11 @@ export function SignInForm() {
           type="email"
           required
           className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          placeholder="tenant-admin@example.com"
+          placeholder={
+            isAdmin
+              ? process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "tenant-admin@example.com"
+              : process.env.NEXT_PUBLIC_DEMO_CUSTOMER_EMAIL ?? "customer@example.com"
+          }
         />
       </div>
       <div className="space-y-2">
@@ -59,7 +100,7 @@ export function SignInForm() {
           type="password"
           required
           className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          placeholder="change-me"
+          placeholder={isAdmin ? "change-me" : "customer-pass"}
         />
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}

@@ -8,8 +8,8 @@ function formatTimeRange(startIso: string, endIso: string) {
   return `${format(start, "M/d (EEE) HH:mm", { locale: ja })} - ${format(end, "HH:mm", { locale: ja })}`;
 }
 
-export async function BookingCalendar() {
-  const availability = await getTenantAvailability("demo-tenant");
+export async function BookingCalendar({ tenantId }: { tenantId?: string } = {}) {
+  const availability = await getTenantAvailability(tenantId ?? "demo-tenant");
 
   return (
     <div className="space-y-6">

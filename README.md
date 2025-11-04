@@ -23,7 +23,10 @@ npx prisma migrate deploy
 Supabase（Postgres）にテーブルを作成するので、`DATABASE_URL` / `DIRECT_URL` を適切に設定してから実行してください。
 Prisma のデータソースには `directUrl` を指定しており、実行時は `DATABASE_URL`（コネクションプール経由）を使用しながら、
 マイグレーション時は `DIRECT_URL`（5432 のメイン接続）を利用します。Supabase のダッシュボードでそれぞれの接続文字列を取得し、
-環境変数へ設定してください。
+環境変数へ設定してください。接続文字列に `sslmode=require` が含まれていない場合、Supabase 側との TLS 交渉で Prisma が
+`unexpected message from server` を返すため、必ず `?sslmode=require`（既にクエリがある場合は `&sslmode=require`）を付与して
+ください。`npm run vercel-build` を実行すると、同コマンド内で起動される `scripts/run-migrate-deploy.mjs` が自動的に
+`sslmode=require` を補完しますが、環境変数に設定する際もあらかじめ含めておくことを推奨します。
 
 Supabase / Stripe / NextAuth など外部サービスの接続情報はダミー値のままでは動作しないため、開発環境ごとに適切な値へ置き換えてください。
 

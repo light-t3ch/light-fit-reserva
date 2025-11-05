@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 
 import { getServerAuthSession } from "@/lib/auth";
 import { BookingError, cancelBookingForCustomer } from "@/server/bookings";
@@ -54,6 +55,10 @@ export async function cancelBookingAction(formData: FormData) {
     const query = result.creditRestored ? "refunded" : "consumed";
     redirect(`${redirectTo}?cancelled=${query}`);
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
     const code = error instanceof BookingError ? error.code : "UNKNOWN";
     const mapped = ERROR_QUERY[code] ?? ERROR_QUERY.UNKNOWN;
     redirect(`${redirectTo}?cancel_error=${mapped}`);

@@ -340,9 +340,8 @@ export async function cancelBookingForCustomer(options: {
     },
     include: {
       ledgerEntries: {
-        where: { eventType: "BOOKING_CONSUME" },
+        where: { eventType: { in: ["BOOKING_CONSUME", "BOOKING_RELEASE"] } },
         orderBy: { occurredAt: "desc" },
-        take: 1,
       },
     },
   });
@@ -351,12 +350,24 @@ export async function cancelBookingForCustomer(options: {
     throw new BookingError("BOOKING_NOT_FOUND", "該当する予約が見つかりませんでした。");
   }
 
+  const { cancelUntil, refundUntil } = getCustomerCancellationWindows(booking.startsAt);
+  const now = new Date();
+
+  const consumeLedger = booking.ledgerEntries.find((entry) => entry.eventType === "BOOKING_CONSUME");
+  const releaseLedger = booking.ledgerEntries.find((entry) => entry.eventType === "BOOKING_RELEASE");
+
+  if (booking.status === "CANCELLED") {
+    return {
+      booking,
+      creditRestored: Boolean(releaseLedger),
+      cancelDeadline: cancelUntil,
+      refundDeadline: refundUntil,
+    };
+  }
+
   if (!isCustomerCancellableStatus(booking.status)) {
     throw new BookingError("BOOKING_NOT_CANCELLABLE", "この予約はキャンセルできません。");
   }
-
-  const { cancelUntil, refundUntil } = getCustomerCancellationWindows(booking.startsAt);
-  const now = new Date();
 
   if (now > cancelUntil) {
     throw new BookingError(
@@ -365,8 +376,7 @@ export async function cancelBookingForCustomer(options: {
     );
   }
 
-  const consumeLedger = booking.ledgerEntries[0];
-  const shouldRestoreCredit = Boolean(consumeLedger) && now < refundUntil;
+  const shouldRestoreCredit = Boolean(consumeLedger) && !releaseLedger && now < refundUntil;
 
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.booking.update({
@@ -400,7 +410,7 @@ export async function cancelBookingForCustomer(options: {
 
   return {
     booking: result,
-    creditRestored: shouldRestoreCredit,
+    creditRestored: shouldRestoreCredit || Boolean(releaseLedger),
     cancelDeadline: cancelUntil,
     refundDeadline: refundUntil,
   };

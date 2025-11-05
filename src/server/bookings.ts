@@ -183,6 +183,20 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
     throw new BookingError("SLOT_NOT_FOUND", "予約枠を取得できませんでした。");
   }
 
+  const existingBookingForCustomer = await prisma.booking.findFirst({
+    where: {
+      tenantId: customer.tenantId,
+      trainerId: slotDetail.trainerId,
+      customerId: customer.id,
+      startsAt: slotDetail.start,
+      status: { in: [...BOOKED_STATUSES] },
+    },
+  });
+
+  if (existingBookingForCustomer) {
+    return existingBookingForCustomer;
+  }
+
   if (!slotDetail.isBookable) {
     throw new BookingError("SLOT_UNAVAILABLE", "選択した枠はすでに予約済みです。");
   }

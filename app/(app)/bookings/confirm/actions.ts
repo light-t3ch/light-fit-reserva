@@ -16,9 +16,19 @@ const ERROR_REDIRECTS: Record<string, string> = {
 
 export async function confirmBookingAction(formData: FormData) {
   const slotId = formData.get("slotId");
+  const requestedBasePath = formData.get("basePath");
+
+  const normalizedBasePath = (() => {
+    if (typeof requestedBasePath !== "string" || requestedBasePath.length === 0) {
+      return "/bookings";
+    }
+    const withLeading = requestedBasePath.startsWith("/") ? requestedBasePath : `/${requestedBasePath}`;
+    const trimmed = withLeading.replace(/\/$/, "");
+    return ["/bookings", "/portal/bookings"].includes(trimmed) ? trimmed : "/bookings";
+  })();
 
   if (typeof slotId !== "string" || slotId.length === 0) {
-    redirect("/bookings?error=slot_missing");
+    redirect(`${normalizedBasePath}?error=slot_missing`);
   }
 
   const session = await getServerAuthSession();
@@ -30,14 +40,14 @@ export async function confirmBookingAction(formData: FormData) {
   try {
     const booking = await createBookingFromSlot({ slotId, userId: session.user.id });
 
-    revalidatePath("/bookings");
+    revalidatePath(normalizedBasePath);
     revalidatePath("/portal");
     revalidatePath("/dashboard");
 
-    redirect(`/bookings/complete?bookingId=${booking.id}`);
+    redirect(`${normalizedBasePath}/complete?bookingId=${booking.id}`);
   } catch (error) {
     const code = error instanceof BookingError ? error.code : "UNKNOWN";
     const mapped = ERROR_REDIRECTS[code] ?? ERROR_REDIRECTS.UNKNOWN;
-    redirect(`/bookings/confirm?slot=${encodeURIComponent(slotId)}&error=${mapped}`);
+    redirect(`${normalizedBasePath}/confirm?slot=${encodeURIComponent(slotId)}&error=${mapped}`);
   }
 }

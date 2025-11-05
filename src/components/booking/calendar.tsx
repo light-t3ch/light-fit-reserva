@@ -10,8 +10,22 @@ function formatTimeRange(startIso: string, endIso: string) {
   return `${format(start, "M/d (EEE) HH:mm", { locale: ja })} - ${format(end, "HH:mm", { locale: ja })}`;
 }
 
-export async function BookingCalendar({ tenantId }: { tenantId?: string } = {}) {
+type BookingCalendarProps = {
+  tenantId?: string;
+  basePath?: string;
+};
+
+function normalizeBasePath(basePath?: string) {
+  if (!basePath) return "/bookings";
+  if (!basePath.startsWith("/")) {
+    return `/${basePath}`;
+  }
+  return basePath.replace(/\/$/, "");
+}
+
+export async function BookingCalendar({ tenantId, basePath }: BookingCalendarProps = {}) {
   const availability = await getTenantAvailability(tenantId ?? "demo-tenant");
+  const normalizedBasePath = normalizeBasePath(basePath);
 
   return (
     <div className="space-y-8">
@@ -55,7 +69,7 @@ export async function BookingCalendar({ tenantId }: { tenantId?: string } = {}) 
               slot.isBookable ? (
                 <Link
                   key={slot.slotId}
-                  href={`/bookings/confirm?slot=${encodeURIComponent(slot.slotId)}`}
+                  href={`${normalizedBasePath}/confirm?slot=${encodeURIComponent(slot.slotId)}`}
                   className="flex w-full flex-col items-start gap-1 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left text-slate-900 transition hover:border-brand-400 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">

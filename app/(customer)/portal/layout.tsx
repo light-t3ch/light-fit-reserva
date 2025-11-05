@@ -28,6 +28,9 @@ export default async function CustomerPortalLayout({
             <Link href="/portal" className="rounded-md px-3 py-2 hover:bg-slate-100">
               予約ポータル
             </Link>
+            <Link href="/portal/bookings" className="rounded-md px-3 py-2 hover:bg-slate-100">
+              予約をする
+            </Link>
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600">
             <div>

@@ -9,7 +9,7 @@ export type TrainerAvailabilitySlot = {
   end: string;
   durationMinutes: number;
   isBookable: boolean;
-  bookingType: "PT_55" | "PT_25" | "COUNSELING" | "TRIAL";
+  bookingType: "PT_55" | "PT_25" | "COUNSELING" | "TRIAL_90" | "ENROLLMENT";
 };
 
 export type TrainerAvailability = {

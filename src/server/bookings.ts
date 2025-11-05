@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateShiftSlots } from "@/server/bootstrap";
 
 type SupportedCreditBucket = "CURRENT" | "NEXT" | "IMMEDIATE";
-type SupportedCreditType = "PT_55" | "PT_25" | "COUNSELING" | "TRIAL" | "TRIAL_90" | "ENROLLMENT";
+type SupportedCreditType = "PT_55" | "PT_25" | "COUNSELING" | "TRIAL_90" | "ENROLLMENT";
 
 export class BookingError extends Error {
   constructor(

@@ -6,7 +6,7 @@ export type CreditBucket = "CURRENT" | "NEXT";
 
 export type CreditSummary = {
   bucket: CreditBucket;
-  creditType: "PT_55" | "PT_25" | "COUNSELING" | "TRIAL";
+  creditType: "PT_55" | "PT_25" | "COUNSELING" | "TRIAL_90" | "ENROLLMENT";
   remaining: number;
   consumedThisMonth: number;
   rolloverEligible: boolean;

@@ -37,13 +37,17 @@ function calculateDelta(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
-export async function getRevenueBreakdown(tenantId: string): Promise<RevenueItem[]> {
+export async function getRevenueBreakdown(
+  tenantId: string,
+  options?: { locationId?: string },
+): Promise<RevenueItem[]> {
   const now = new Date();
   const currentMonthStart = startOfMonth(now);
   const previousMonthStart = subMonths(currentMonthStart, 1);
   const purchases = await prisma.planPurchase.findMany({
     where: {
       tenantId,
+      ...(options?.locationId ? { customer: { locationId: options.locationId } } : {}),
       OR: [
         { currentPeriodStart: { gte: previousMonthStart } },
         { createdAt: { gte: previousMonthStart } },
@@ -120,13 +124,17 @@ function isUpcomingBookingStatus(
   );
 }
 
-export async function getUpcomingBookings(tenantId: string): Promise<UpcomingBooking[]> {
+export async function getUpcomingBookings(
+  tenantId: string,
+  options?: { locationId?: string },
+): Promise<UpcomingBooking[]> {
   const start = startOfDay(new Date());
   const end = endOfDay(new Date());
 
   const bookings = await prisma.booking.findMany({
     where: {
       tenantId,
+      ...(options?.locationId ? { locationId: options.locationId } : {}),
       status: { in: ["BOOKED", "CHECKED_IN"] },
       startsAt: {
         gte: start,

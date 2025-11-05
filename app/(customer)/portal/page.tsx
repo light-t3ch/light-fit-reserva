@@ -42,6 +42,7 @@ function buildAlert(searchParams?: PageProps["searchParams"]) {
       slot_missing: "予約情報を取得できませんでした。",
       slot_unavailable: "すでに処理済みの予約です。",
       no_credit: "チケット情報を確認できませんでした。",
+      location_mismatch: "ご契約店舗以外の予約は処理できません。",
     };
 
     return {
@@ -96,12 +97,6 @@ export default async function CustomerPortalPage({ searchParams }: PageProps) {
               className="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               予約画面へ進む
-            </Link>
-            <Link
-              href="/bookings"
-              className="inline-flex items-center justify-center rounded-full border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-500"
-            >
-              管理者の代理予約画面を見る
             </Link>
           </div>
         </header>

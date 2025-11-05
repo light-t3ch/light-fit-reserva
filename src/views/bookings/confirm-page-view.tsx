@@ -30,6 +30,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   slot_unavailable: "申し訳ございません。こちらの枠はすでに満席です。",
   no_credit: "該当メニューに利用できるチケットが残っていません。",
   no_customer: "お客様情報が見つかりませんでした。サポートへご連絡ください。",
+  location_mismatch: "ご契約店舗以外の予約はできません。店舗を選び直してください。",
   unknown: "処理中にエラーが発生しました。時間をおいて再度お試しください。",
 };
 
@@ -55,8 +56,11 @@ export async function ConfirmBookingPageView({ searchParams, basePath }: Confirm
   }
 
   const tenantId = session.user.tenantId ?? "demo-tenant";
+  const enforceLocationId = session.user.locationId ?? null;
+
   const slot = await getSlotDetail(tenantId, slotId, {
     customerUserId: session.user.id,
+    enforceLocationId: enforceLocationId ?? undefined,
   });
 
   if (!slot) {

@@ -16,7 +16,8 @@ export class BookingError extends Error {
       | "CUSTOMER_NOT_FOUND"
       | "BOOKING_NOT_FOUND"
       | "BOOKING_NOT_CANCELLABLE"
-      | "CANCELLATION_WINDOW_CLOSED",
+      | "CANCELLATION_WINDOW_CLOSED"
+      | "LOCATION_MISMATCH",
     message: string,
   ) {
     super(message);
@@ -71,7 +72,7 @@ export type SlotDetail = {
 export async function getSlotDetail(
   tenantId: string,
   slotId: string,
-  options?: { customerUserId?: string },
+  options?: { customerUserId?: string; enforceLocationId?: string },
 ): Promise<SlotDetail | null> {
   const { trainerId, start } = parseSlotId(slotId);
 
@@ -92,6 +93,10 @@ export async function getSlotDetail(
     return null;
   }
 
+  if (options?.enforceLocationId && shift.location.id !== options.enforceLocationId) {
+    return null;
+  }
+
   const slots = generateShiftSlots(shift.startsAt, shift.endsAt);
   const slot = slots.find((candidate) => Math.abs(candidate.start.getTime() - start.getTime()) < 1000);
 
@@ -99,15 +104,23 @@ export async function getSlotDetail(
     return null;
   }
 
-  let currentCustomerId: string | null = null;
+  let currentCustomer: { id: string; locationId: string | null } | null = null;
 
   if (options?.customerUserId) {
     const customer = await prisma.customer.findFirst({
       where: { tenantId, userId: options.customerUserId },
-      select: { id: true },
+      select: { id: true, locationId: true },
     });
 
-    currentCustomerId = customer?.id ?? null;
+    currentCustomer = customer ?? null;
+  }
+
+  if (
+    currentCustomer?.locationId &&
+    shift.location.id !== currentCustomer.locationId &&
+    !options?.enforceLocationId
+  ) {
+    return null;
   }
 
   const existingBooking = await prisma.booking.findFirst({
@@ -121,7 +134,7 @@ export async function getSlotDetail(
   });
 
   const ownedByCurrentCustomer = Boolean(
-    existingBooking && currentCustomerId && existingBooking.customerId === currentCustomerId,
+    existingBooking && currentCustomer && existingBooking.customerId === currentCustomer.id,
   );
 
   return {
@@ -180,7 +193,7 @@ function determineBucketPriority(start: Date): SupportedCreditBucket[] {
 async function findCustomer(userId: string) {
   return prisma.customer.findFirst({
     where: { userId },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, locationId: true },
   });
 }
 
@@ -240,10 +253,18 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
 
   const slotDetail = await getSlotDetail(customer.tenantId, options.slotId, {
     customerUserId: options.userId,
+    enforceLocationId: customer.locationId ?? undefined,
   });
 
   if (!slotDetail) {
     throw new BookingError("SLOT_NOT_FOUND", "予約枠を取得できませんでした。");
+  }
+
+  if (!customer.locationId || slotDetail.locationId !== customer.locationId) {
+    throw new BookingError(
+      "LOCATION_MISMATCH",
+      "ご契約店舗以外の予約枠はご利用いただけません。",
+    );
   }
 
   const existingBookingForCustomer = await prisma.booking.findFirst({

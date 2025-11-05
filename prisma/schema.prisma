@@ -85,6 +85,7 @@ model Tenant {
 model Location {
   id        String    @id @default(cuid())
   tenantId  String
+  slug      String
   name      String
   timezone  String    @default("Asia/Tokyo")
   address   String?
@@ -94,8 +95,12 @@ model Location {
   trainerShifts TrainerShift[]
   bookings  Booking[]
   closures  ScheduleClosure[]
+  customers Customer[]
+  admins    User[]    @relation("LocationAdmins")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@unique([tenantId, slug])
 }
 
 model User {
@@ -105,10 +110,12 @@ model User {
   emailVerified DateTime?
   image         String?
   role          UserRole  @default(CUSTOMER)
-  tenantId      String?
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
-  trainer       Trainer?
-  customer      Customer?
+  tenantId          String?
+  managedLocationId String?
+  tenant            Tenant?   @relation(fields: [tenantId], references: [id])
+  managedLocation   Location? @relation("LocationAdmins", fields: [managedLocationId], references: [id])
+  trainer           Trainer?
+  customer          Customer?
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime  @default(now())
@@ -158,9 +165,11 @@ model Customer {
   firstName        String
   lastName         String
   email            String?
+  locationId       String?
   phone            String?
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
   user             User?           @relation(fields: [userId], references: [id])
+  location         Location?       @relation(fields: [locationId], references: [id])
   bookings         Booking[]
   purchases        PlanPurchase[]
   creditLedger     CreditLedgerEntry[]
@@ -168,6 +177,7 @@ model Customer {
   updatedAt        DateTime        @updatedAt
 
   @@index([tenantId, lastName, firstName])
+  @@index([tenantId, locationId])
 }
 
 model Plan {

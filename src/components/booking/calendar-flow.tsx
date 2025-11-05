@@ -56,6 +56,7 @@ const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
 type BookingCalendarFlowProps = {
   availability: TrainerAvailability[];
   basePath: string;
+  locationName?: string;
 };
 
 type TrainerOption = {
@@ -158,7 +159,7 @@ function formatTimeRange(startIso: string, endIso: string) {
   return `${format(start, "HH:mm", { locale: ja })}〜${format(end, "HH:mm", { locale: ja })}`;
 }
 
-export function BookingCalendarFlow({ availability, basePath }: BookingCalendarFlowProps) {
+export function BookingCalendarFlow({ availability, basePath, locationName }: BookingCalendarFlowProps) {
   const slotViews = useMemo(() => buildSlotViews(availability), [availability]);
   const trainerOptions = useMemo(() => buildTrainerOptions(availability), [availability]);
 
@@ -246,6 +247,12 @@ export function BookingCalendarFlow({ availability, basePath }: BookingCalendarF
 
   return (
     <div className="space-y-8">
+      {locationName && (
+        <div className="rounded-3xl border border-brand-100 bg-brand-50/60 px-6 py-4 text-sm text-brand-700 shadow-sm">
+          <p className="font-semibold">{locationName} の空き状況を表示しています。</p>
+          <p className="mt-1 text-xs text-brand-600">店舗を変更する場合はログイン画面で店舗を選び直してください。</p>
+        </div>
+      )}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <header className="flex items-center justify-between">
           <div>

@@ -5,8 +5,16 @@ const currencyFormatter = new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 });
 
-export async function RevenueBreakdown({ tenantId }: { tenantId?: string } = {}) {
-  const revenue = await getRevenueBreakdown(tenantId ?? "demo-tenant");
+export async function RevenueBreakdown({
+  tenantId,
+  locationId,
+}: {
+  tenantId?: string;
+  locationId?: string | null;
+} = {}) {
+  const revenue = await getRevenueBreakdown(tenantId ?? "demo-tenant", {
+    locationId: locationId ?? undefined,
+  });
 
   if (revenue.length === 0) {
     return (

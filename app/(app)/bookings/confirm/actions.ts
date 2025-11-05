@@ -11,6 +11,7 @@ const ERROR_REDIRECTS: Record<string, string> = {
   SLOT_UNAVAILABLE: "slot_unavailable",
   NO_AVAILABLE_CREDIT: "no_credit",
   CUSTOMER_NOT_FOUND: "no_customer",
+  LOCATION_MISMATCH: "location_mismatch",
   UNKNOWN: "unknown",
 };
 

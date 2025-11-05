@@ -2,8 +2,16 @@ import { getUpcomingBookings } from "@/server/metrics";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-export async function UpcomingBookings({ tenantId }: { tenantId?: string } = {}) {
-  const bookings = await getUpcomingBookings(tenantId ?? "demo-tenant");
+export async function UpcomingBookings({
+  tenantId,
+  locationId,
+}: {
+  tenantId?: string;
+  locationId?: string | null;
+} = {}) {
+  const bookings = await getUpcomingBookings(tenantId ?? "demo-tenant", {
+    locationId: locationId ?? undefined,
+  });
 
   if (bookings.length === 0) {
     return (

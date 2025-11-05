@@ -20,6 +20,8 @@ export default async function CustomerPortalLayout({
     redirect("/dashboard");
   }
 
+  const locationName = session.user.locationName ?? "店舗未設定";
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
@@ -35,7 +37,7 @@ export default async function CustomerPortalLayout({
           <div className="flex items-center gap-4 text-sm text-slate-600">
             <div>
               <p className="font-semibold text-slate-800">{session.user.name ?? "お客様"}</p>
-              <p className="text-xs uppercase tracking-wide text-brand-600">{session.user.role}</p>
+              <p className="text-xs uppercase tracking-wide text-brand-600">{locationName}</p>
             </div>
             <SignOutButton />
           </div>

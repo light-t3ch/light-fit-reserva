@@ -29,11 +29,15 @@ function overlaps(
   return slotStart < booking.endsAt && slotEnd > booking.startsAt;
 }
 
-export async function getTenantAvailability(tenantId: string): Promise<TrainerAvailability[]> {
+export async function getTenantAvailability(
+  tenantId: string,
+  options?: { locationId?: string },
+): Promise<TrainerAvailability[]> {
   const now = new Date();
   const shifts = await prisma.trainerShift.findMany({
     where: {
       tenantId,
+      ...(options?.locationId ? { locationId: options.locationId } : {}),
       endsAt: {
         gte: now,
       },

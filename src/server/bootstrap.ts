@@ -4,24 +4,31 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
+const LOCATION_SEEDS = [
+  { slug: "noda-hanshin", name: "野田阪神店", timezone: "Asia/Tokyo", address: "大阪市福島区海老江" },
+  { slug: "fukushima", name: "福島店", timezone: "Asia/Tokyo", address: "大阪市福島区福島" },
+  { slug: "awaza", name: "阿波座店", timezone: "Asia/Tokyo", address: "大阪市西区阿波座" },
+  { slug: "ebie", name: "海老江店", timezone: "Asia/Tokyo", address: "大阪市福島区海老江" },
+  { slug: "kujo", name: "九条店", timezone: "Asia/Tokyo", address: "大阪市西区九条" },
+  { slug: "higobashi", name: "肥後橋店", timezone: "Asia/Tokyo", address: "大阪市西区江戸堀" },
+  { slug: "tsukamoto", name: "塚本店", timezone: "Asia/Tokyo", address: "大阪市淀川区塚本" },
+  { slug: "temma", name: "天満店", timezone: "Asia/Tokyo", address: "大阪市北区天神橋" },
+  { slug: "tamatsukuri", name: "玉造店", timezone: "Asia/Tokyo", address: "大阪市中央区玉造" },
+];
+
 const TRAINER_SEEDS = [
   {
     email: "taro.yamada@example.com",
     name: "山田 太郎",
-    locationName: "阿波座店",
+    locationSlug: "awaza",
     bio: "肩こり解消とボディメイクを得意とするトレーナー。",
   },
   {
     email: "hanako.sato@example.com",
     name: "佐藤 花子",
-    locationName: "本町店",
+    locationSlug: "fukushima",
     bio: "女性向けの姿勢改善とコンディショニングを担当。",
   },
-];
-
-const LOCATION_SEEDS = [
-  { name: "阿波座店", timezone: "Asia/Tokyo", address: "大阪市西区阿波座" },
-  { name: "本町店", timezone: "Asia/Tokyo", address: "大阪市中央区本町" },
 ];
 
 const PLAN_SEEDS = [
@@ -119,7 +126,7 @@ export async function ensureDemoTenantData(tenantId: string) {
   const trainers = await ensureTrainers(tenantId, locations);
   await ensurePlans(tenantId);
   await ensureShifts(tenantId, trainers, locations);
-  const { customer } = await ensureDemoCustomer(tenantId);
+  const { customer } = await ensureDemoCustomer(tenantId, locations);
   await ensureDemoPurchasesAndBookings(tenantId, customer.id, trainers, locations);
 
   await prisma.tenant.update({
@@ -128,38 +135,58 @@ export async function ensureDemoTenantData(tenantId: string) {
   });
 }
 
-async function ensureLocations(tenantId: string) {
-  const existing = await prisma.location.findMany({ where: { tenantId } });
-  if (existing.length >= LOCATION_SEEDS.length) {
-    return existing.reduce<Record<string, typeof existing[number]>>((acc, loc) => {
-      acc[loc.name] = loc;
-      return acc;
-    }, {});
-  }
+type LocationMap = Record<string, { id: string; name: string; slug: string }>;
 
-  const created = await Promise.all(
-    LOCATION_SEEDS.filter((seed) => !existing.find((loc) => loc.name === seed.name)).map((seed) =>
-      prisma.location.create({
+async function ensureLocations(tenantId: string): Promise<LocationMap> {
+  const existing = await prisma.location.findMany({ where: { tenantId } });
+
+  const bySlug = new Map(existing.map((location) => [location.slug, location] as const));
+  const byName = new Map(existing.map((location) => [location.name, location] as const));
+
+  const ensured = await Promise.all(
+    LOCATION_SEEDS.map(async (seed) => {
+      const matchBySlug = bySlug.get(seed.slug);
+      if (matchBySlug) {
+        if (
+          matchBySlug.name !== seed.name ||
+          matchBySlug.timezone !== seed.timezone ||
+          matchBySlug.address !== seed.address
+        ) {
+          return prisma.location.update({
+            where: { id: matchBySlug.id },
+            data: { name: seed.name, timezone: seed.timezone, address: seed.address },
+          });
+        }
+        return matchBySlug;
+      }
+
+      const matchByName = byName.get(seed.name);
+      if (matchByName) {
+        return prisma.location.update({
+          where: { id: matchByName.id },
+          data: { slug: seed.slug, timezone: seed.timezone, address: seed.address },
+        });
+      }
+
+      return prisma.location.create({
         data: {
           tenantId,
+          slug: seed.slug,
           name: seed.name,
           timezone: seed.timezone,
           address: seed.address,
         },
-      }),
-    ),
+      });
+    }),
   );
 
-  return [...existing, ...created].reduce<Record<string, typeof existing[number]>>((acc, loc) => {
-    acc[loc.name] = loc;
+  return ensured.reduce<LocationMap>((acc, location) => {
+    acc[location.slug] = { id: location.id, name: location.name, slug: location.slug };
     return acc;
-  }, {});
+  }, {} as LocationMap);
 }
 
-async function ensureTrainers(
-  tenantId: string,
-  locations: Record<string, { id: string }>,
-) {
+async function ensureTrainers(tenantId: string, locations: LocationMap) {
   const trainers: Record<string, Awaited<ReturnType<typeof prisma.trainer.findFirst>>> = {};
 
   for (const seed of TRAINER_SEEDS) {
@@ -170,6 +197,8 @@ async function ensureTrainers(
       },
     });
 
+    const targetLocationId = locations[seed.locationSlug]?.id;
+
     if (!trainer) {
       trainer = await prisma.trainer.create({
         data: {
@@ -177,8 +206,13 @@ async function ensureTrainers(
           name: seed.name,
           email: seed.email,
           bio: seed.bio,
-          locationId: locations[seed.locationName]?.id,
+          locationId: targetLocationId,
         },
+      });
+    } else if (targetLocationId && trainer.locationId !== targetLocationId) {
+      trainer = await prisma.trainer.update({
+        where: { id: trainer.id },
+        data: { locationId: targetLocationId },
       });
     }
 
@@ -233,7 +267,7 @@ async function ensurePlans(tenantId: string) {
 async function ensureShifts(
   tenantId: string,
   trainers: Record<string, { id: string; locationId: string | null }>,
-  locations: Record<string, { id: string }>,
+  locations: LocationMap,
 ) {
   const today = startOfDay(new Date());
   const existingCount = await prisma.trainerShift.count({
@@ -252,19 +286,19 @@ async function ensureShifts(
   const shiftSeeds = [
     {
       trainerEmail: "taro.yamada@example.com",
-      locationName: "阿波座店",
+      locationSlug: "awaza",
       start: buildShiftTime(1, 9),
       end: buildShiftTime(1, 14),
     },
     {
       trainerEmail: "hanako.sato@example.com",
-      locationName: "本町店",
+      locationSlug: "fukushima",
       start: buildShiftTime(1, 12),
       end: buildShiftTime(1, 18),
     },
     {
       trainerEmail: "taro.yamada@example.com",
-      locationName: "阿波座店",
+      locationSlug: "awaza",
       start: buildShiftTime(2, 10),
       end: buildShiftTime(2, 15),
     },
@@ -274,7 +308,7 @@ async function ensureShifts(
     data: shiftSeeds.map((seed) => ({
       tenantId,
       trainerId: trainers[seed.trainerEmail]?.id ?? Object.values(trainers)[0].id,
-      locationId: locations[seed.locationName]?.id ?? Object.values(locations)[0].id,
+      locationId: locations[seed.locationSlug]?.id ?? Object.values(locations)[0]?.id,
       startsAt: seed.start,
       endsAt: seed.end,
       capacity: 1,
@@ -282,10 +316,11 @@ async function ensureShifts(
   });
 }
 
-async function ensureDemoCustomer(tenantId: string) {
+async function ensureDemoCustomer(tenantId: string, locations: LocationMap) {
   const customerEmail = process.env.DEMO_CUSTOMER_EMAIL ?? "customer@example.com";
   const firstName = process.env.DEMO_CUSTOMER_FIRST_NAME ?? "太郎";
   const lastName = process.env.DEMO_CUSTOMER_LAST_NAME ?? "予約";
+  const defaultLocation = locations["awaza"] ?? Object.values(locations)[0];
 
   let user = await prisma.user.findUnique({ where: { email: customerEmail } });
   if (!user) {
@@ -295,6 +330,7 @@ async function ensureDemoCustomer(tenantId: string) {
         name: `${lastName} ${firstName}`,
         role: "CUSTOMER",
         tenantId,
+        managedLocationId: null,
       },
     });
   } else if (user.tenantId !== tenantId || user.role !== "CUSTOMER") {
@@ -303,6 +339,7 @@ async function ensureDemoCustomer(tenantId: string) {
       data: {
         tenantId,
         role: "CUSTOMER",
+        managedLocationId: null,
       },
     });
   }
@@ -314,6 +351,7 @@ async function ensureDemoCustomer(tenantId: string) {
       firstName,
       lastName,
       email: customerEmail,
+      locationId: defaultLocation?.id,
     },
     create: {
       tenantId,
@@ -321,6 +359,7 @@ async function ensureDemoCustomer(tenantId: string) {
       firstName,
       lastName,
       email: customerEmail,
+      locationId: defaultLocation?.id,
     },
   });
 
@@ -331,7 +370,7 @@ async function ensureDemoPurchasesAndBookings(
   tenantId: string,
   customerId: string,
   trainers: Record<string, { id: string }>,
-  locations: Record<string, { id: string }>,
+  locations: LocationMap,
 ) {
   const plans = await prisma.plan.findMany({
     where: { slug: { in: PLAN_SEEDS.map((p) => p.slug) } },
@@ -405,7 +444,7 @@ async function ensureDemoPurchasesAndBookings(
     {
       planSlug: "pt-55-monthly-4",
       trainerEmail: "taro.yamada@example.com",
-      locationName: "阿波座店",
+      locationSlug: "awaza",
       start: buildShiftTime(1, 10),
       duration: 55,
       creditType: "PT_55" as const,
@@ -413,7 +452,7 @@ async function ensureDemoPurchasesAndBookings(
     {
       planSlug: "pt-25-monthly-4",
       trainerEmail: "hanako.sato@example.com",
-      locationName: "本町店",
+      locationSlug: "fukushima",
       start: buildShiftTime(3, 14),
       duration: 25,
       creditType: "PT_25" as const,
@@ -443,7 +482,7 @@ async function ensureDemoPurchasesAndBookings(
       data: {
         tenantId,
         customerId,
-        locationId: locations[seed.locationName]?.id ?? Object.values(locations)[0].id,
+        locationId: locations[seed.locationSlug]?.id ?? Object.values(locations)[0]?.id,
         trainerId: trainers[seed.trainerEmail]?.id,
         planPurchaseId: purchase.purchaseId,
         creditType: seed.creditType,

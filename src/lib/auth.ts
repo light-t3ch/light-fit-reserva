@@ -10,6 +10,7 @@ const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(4),
   audience: z.enum(["ADMIN", "CUSTOMER"]).default("ADMIN"),
+  locationSlug: z.string().min(1).optional(),
 });
 
 export const authOptions: NextAuthOptions = {
@@ -30,7 +31,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const { email, password, audience } = parsed.data;
+        const { email, password, audience, locationSlug } = parsed.data;
         const tenantSlug = process.env.APP_TENANT_SLUG ?? "light-fit";
         const tenant = await prisma.tenant.upsert({
           where: { slug: tenantSlug },
@@ -49,11 +50,12 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          const user = await prisma.user.upsert({
+          let user = await prisma.user.upsert({
             where: { email },
             update: {
               tenantId: tenant.id,
               role: "TENANT_ADMIN",
+              managedLocationId: undefined,
             },
             create: {
               email,
@@ -65,12 +67,45 @@ export const authOptions: NextAuthOptions = {
 
           await ensureDemoTenantData(tenant.id);
 
+          const requestedLocation = locationSlug
+            ? await prisma.location.findFirst({
+                where: { tenantId: tenant.id, slug: locationSlug },
+              })
+            : null;
+
+          let adminLocation = requestedLocation;
+
+          if (!adminLocation && user.managedLocationId) {
+            adminLocation = await prisma.location.findUnique({ where: { id: user.managedLocationId } });
+          }
+
+          if (!adminLocation) {
+            adminLocation = await prisma.location.findFirst({
+              where: { tenantId: tenant.id },
+              orderBy: { name: "asc" },
+            });
+          }
+
+          if (!adminLocation) {
+            return null;
+          }
+
+          if (user.managedLocationId !== adminLocation.id) {
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { managedLocationId: adminLocation.id },
+            });
+          }
+
           return {
             id: user.id,
             email: user.email ?? undefined,
             name: user.name ?? undefined,
             role: user.role,
             tenantId: user.tenantId ?? null,
+            locationId: adminLocation.id,
+            locationName: adminLocation.name,
+            locationSlug: adminLocation.slug,
           };
         }
 
@@ -81,11 +116,12 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.upsert({
+        let user = await prisma.user.upsert({
           where: { email },
           update: {
             tenantId: tenant.id,
             role: "CUSTOMER",
+            managedLocationId: null,
           },
           create: {
             email,
@@ -96,13 +132,38 @@ export const authOptions: NextAuthOptions = {
               }`,
             role: "CUSTOMER",
             tenantId: tenant.id,
+            managedLocationId: null,
           },
         });
 
-        await prisma.customer.upsert({
+        await ensureDemoTenantData(tenant.id);
+
+        const existingCustomer = await prisma.customer.findFirst({
+          where: { userId: user.id },
+          include: { location: { select: { id: true, name: true, slug: true } } },
+        });
+
+        const requestedLocation = locationSlug
+          ? await prisma.location.findFirst({ where: { tenantId: tenant.id, slug: locationSlug } })
+          : null;
+
+        let customerLocation = requestedLocation ?? existingCustomer?.location ?? null;
+
+        if (!customerLocation) {
+          customerLocation = await prisma.location.findFirst({
+            where: { tenantId: tenant.id },
+            orderBy: { name: "asc" },
+          });
+        }
+
+        const customer = await prisma.customer.upsert({
           where: { userId: user.id },
           update: {
+            tenantId: tenant.id,
+            firstName: process.env.DEMO_CUSTOMER_FIRST_NAME ?? "太郎",
+            lastName: process.env.DEMO_CUSTOMER_LAST_NAME ?? "予約",
             email: user.email ?? undefined,
+            locationId: customerLocation?.id,
           },
           create: {
             tenantId: tenant.id,
@@ -110,10 +171,9 @@ export const authOptions: NextAuthOptions = {
             firstName: process.env.DEMO_CUSTOMER_FIRST_NAME ?? "太郎",
             lastName: process.env.DEMO_CUSTOMER_LAST_NAME ?? "予約",
             email: user.email ?? undefined,
+            locationId: customerLocation?.id,
           },
         });
-
-        await ensureDemoTenantData(tenant.id);
 
         return {
           id: user.id,
@@ -121,6 +181,9 @@ export const authOptions: NextAuthOptions = {
           name: user.name ?? undefined,
           role: user.role,
           tenantId: user.tenantId ?? null,
+          locationId: customer.locationId ?? customerLocation?.id ?? null,
+          locationName: customerLocation?.name ?? undefined,
+          locationSlug: customerLocation?.slug ?? undefined,
         };
       },
     }),
@@ -131,18 +194,35 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role;
         token.tenantId = user.tenantId ?? null;
+        token.locationId = (user as typeof user & { locationId?: string | null }).locationId ?? null;
+        token.locationName = (user as typeof user & { locationName?: string | null }).locationName ?? null;
+        token.locationSlug = (user as typeof user & { locationSlug?: string | null }).locationSlug ?? null;
       }
 
-      if ((!token.role || !("tenantId" in token)) && token.sub) {
+      if (token.sub) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { id: true, role: true, tenantId: true },
+          select: {
+            id: true,
+            role: true,
+            tenantId: true,
+            managedLocation: { select: { id: true, name: true, slug: true } },
+            customer: {
+              select: {
+                location: { select: { id: true, name: true, slug: true } },
+              },
+            },
+          },
         });
 
         if (dbUser) {
           token.id = dbUser.id;
           token.role = dbUser.role;
           token.tenantId = dbUser.tenantId ?? null;
+          const locationRecord = dbUser.managedLocation ?? dbUser.customer?.location ?? null;
+          token.locationId = locationRecord?.id ?? null;
+          token.locationName = locationRecord?.name ?? null;
+          token.locationSlug = locationRecord?.slug ?? null;
         }
       }
 
@@ -154,6 +234,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = (token.role as string) ?? "";
         session.user.tenantId =
           (token.tenantId as string | null | undefined) ?? null;
+        session.user.locationId = (token.locationId as string | null | undefined) ?? null;
+        session.user.locationName = (token.locationName as string | null | undefined) ?? null;
+        session.user.locationSlug = (token.locationSlug as string | null | undefined) ?? null;
       }
       return session;
     },

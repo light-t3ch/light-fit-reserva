@@ -15,6 +15,7 @@ const ERROR_QUERY: Record<BookingError["code"] | "UNKNOWN" | "MISSING_BOOKING", 
   BOOKING_NOT_FOUND: "not_found",
   BOOKING_NOT_CANCELLABLE: "not_cancellable",
   CANCELLATION_WINDOW_CLOSED: "window_closed",
+  LOCATION_MISMATCH: "location_mismatch",
   UNKNOWN: "unknown",
   MISSING_BOOKING: "missing",
 };

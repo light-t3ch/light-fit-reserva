@@ -1,3 +1,6 @@
+-- Ensure long-running updates do not fail on hosted Postgres (e.g. Supabase)
+SET statement_timeout = 0;
+
 -- Add slug to locations for store-level routing
 ALTER TABLE "Location" ADD COLUMN IF NOT EXISTS "slug" TEXT;
 
@@ -26,3 +29,5 @@ ALTER TABLE "Customer"
   ADD CONSTRAINT "Customer_locationId_fkey"
   FOREIGN KEY ("locationId") REFERENCES "Location"("id")
   ON DELETE SET NULL ON UPDATE CASCADE;
+
+RESET statement_timeout;

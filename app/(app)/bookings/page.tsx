@@ -4,7 +4,19 @@ import { BookingSummary } from "@/components/booking/summary";
 import { getServerAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export default async function BookingPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  slot_missing: "予約枠が見つかりませんでした。別の枠をお試しください。",
+  slot_unavailable: "選択した枠は満席となりました。別の時間をお選びください。",
+  no_credit: "利用可能なチケットが残っていません。プランをご確認ください。",
+  no_customer: "お客様情報を取得できませんでした。サポートへご連絡ください。",
+  unknown: "エラーが発生しました。時間をおいて再度お試しください。",
+};
+
+export default async function BookingPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
   const session = await getServerAuthSession();
 
   if (!session?.user) {
@@ -13,6 +25,9 @@ export default async function BookingPage() {
 
   const tenantId = session.user.tenantId ?? "demo-tenant";
   const userId = session.user.id ?? "demo-user";
+
+  const errorKey = typeof searchParams?.error === "string" ? searchParams.error : undefined;
+  const errorMessage = errorKey ? ERROR_MESSAGES[errorKey] ?? ERROR_MESSAGES.unknown : null;
 
   return (
     <main className="min-h-screen bg-slate-50 pb-16 pt-12">
@@ -24,6 +39,11 @@ export default async function BookingPage() {
             下記のステップに沿ってトレーナー・メニュー・日時をお選びください。予約内容は最後に確認できます。
           </p>
         </header>
+        {errorMessage && (
+          <p className="mx-auto w-full max-w-2xl rounded-2xl border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+            {errorMessage}
+          </p>
+        )}
         <div className="grid gap-8 lg:grid-cols-[3fr_2fr]">
           <section className="space-y-6">
             <Suspense fallback={<div className="rounded-3xl bg-white p-8 shadow-sm">読み込み中...</div>}>

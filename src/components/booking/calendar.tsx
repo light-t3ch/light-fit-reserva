@@ -1,6 +1,8 @@
-import { getTenantAvailability } from "@/server/availability";
+import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+
+import { getTenantAvailability } from "@/server/availability";
 
 function formatTimeRange(startIso: string, endIso: string) {
   const start = new Date(startIso);
@@ -49,31 +51,43 @@ export async function BookingCalendar({ tenantId }: { tenantId?: string } = {}) 
             </div>
           </div>
           <div className="space-y-1 px-4 py-4">
-            {trainer.slots.map((slot) => (
-              <button
-                key={slot.slotId}
-                type="button"
-                className={`flex w-full flex-col items-start gap-1 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                  slot.isBookable
-                    ? "border-slate-200 bg-white text-slate-900 hover:border-brand-400 hover:bg-brand-50"
-                    : "border-dashed border-slate-200 bg-slate-100 text-slate-400"
-                }`}
-                disabled={!slot.isBookable}
-              >
-                <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600">
-                    {slot.durationMinutes === 55 ? "55分" : "25分"}
-                  </span>
-                  <span className="text-sm font-medium">
-                    {formatTimeRange(slot.start, slot.end)}
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                    {slot.bookingType}
-                  </span>
+            {trainer.slots.map((slot) =>
+              slot.isBookable ? (
+                <Link
+                  key={slot.slotId}
+                  href={`/bookings/confirm?slot=${encodeURIComponent(slot.slotId)}`}
+                  className="flex w-full flex-col items-start gap-1 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left text-slate-900 transition hover:border-brand-400 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                >
+                  <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600">
+                      {slot.durationMinutes === 55 ? "55分" : "25分"}
+                    </span>
+                    <span className="text-sm font-medium">{formatTimeRange(slot.start, slot.end)}</span>
+                    <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                      {slot.bookingType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-600">この枠を予約する</p>
+                </Link>
+              ) : (
+                <div
+                  key={slot.slotId}
+                  className="flex w-full flex-col items-start gap-1 rounded-2xl border border-dashed border-slate-200 bg-slate-100 px-4 py-4 text-left text-slate-400"
+                  aria-disabled
+                >
+                  <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-500">
+                      {slot.durationMinutes === 55 ? "55分" : "25分"}
+                    </span>
+                    <span className="text-sm font-medium">{formatTimeRange(slot.start, slot.end)}</span>
+                    <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                      {slot.bookingType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">この枠は満席です</p>
                 </div>
-                {!slot.isBookable && <p className="text-xs text-slate-400">この枠は満席です</p>}
-              </button>
-            ))}
+              ),
+            )}
           </div>
         </article>
       ))}

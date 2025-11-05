@@ -183,6 +183,16 @@ async function resolveCredit(
     }))
     .filter((group) => group.remaining > 0);
 
+  const isCurrentMonthSlot =
+    startOfMonth(slotStart).getTime() === startOfMonth(new Date()).getTime();
+  const requiresCurrentBucket =
+    isCurrentMonthSlot && (creditType === "PT_55" || creditType === "PT_25");
+
+  if (requiresCurrentBucket) {
+    const currentCandidate = candidates.find((candidate) => candidate.bucket === "CURRENT");
+    return currentCandidate ?? null;
+  }
+
   for (const bucket of priorities) {
     const match = candidates.find((candidate) => candidate.bucket === bucket);
     if (match) {

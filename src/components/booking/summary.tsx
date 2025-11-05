@@ -57,7 +57,7 @@ export async function BookingSummary({ userId }: { userId?: string } = {}) {
         </header>
         <ul className="mt-4 space-y-3 text-xs leading-5 text-slate-600">
           <li>・24日21:00以降に来月の予約枠が公開されます。</li>
-          <li>・当日22:00まではマイページからキャンセル可能です。それ以降はチケット消化扱いとなります。</li>
+          <li>・前日22:00まではマイページからキャンセル可能です。それ以降はチケット消化扱いとなります。</li>
           <li>・月額プランは毎月22日24:00に決済され、来月分の枠が追加されます。</li>
           <li>・特別追加チケットは購入直後から当月の枠としてご利用いただけます。</li>
         </ul>

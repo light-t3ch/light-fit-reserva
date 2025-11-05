@@ -1,5 +1,5 @@
 import { BookingStatus } from "@prisma/client";
-import { addMonths, set, startOfDay, startOfMonth, subHours } from "date-fns";
+import { addMonths, startOfDay, startOfMonth, subHours } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
 import { generateShiftSlots } from "@/server/bootstrap";
@@ -148,8 +148,11 @@ type CreditCandidate = {
 };
 
 export function getCustomerCancellationWindows(startsAt: Date) {
-  const cancelUntil = set(startsAt, { hours: 22, minutes: 0, seconds: 0, milliseconds: 0 });
-  const refundUntil = subHours(startOfDay(startsAt), 2);
+  const startOfBookingDay = startOfDay(startsAt);
+  const cancellationCutoff = subHours(startOfBookingDay, 2);
+
+  const cancelUntil = cancellationCutoff;
+  const refundUntil = cancellationCutoff;
 
   return { cancelUntil, refundUntil };
 }

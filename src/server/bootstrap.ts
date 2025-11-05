@@ -78,12 +78,54 @@ function buildShiftTime(dayOffset: number, hour: number, minute = 0) {
 }
 
 export async function ensureDemoTenantData(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { demoBootstrappedAt: true },
+  });
+
+  if (tenant?.demoBootstrappedAt) {
+    return;
+  }
+
+  const [trainerCount, planCount, shiftCount, purchaseCount] = await Promise.all([
+    prisma.trainer.count({ where: { tenantId } }),
+    prisma.plan.count({ where: { tenantId, slug: { in: PLAN_SEEDS.map((plan) => plan.slug) } } }),
+    prisma.trainerShift.count({
+      where: {
+        tenantId,
+        startsAt: {
+          gte: startOfDay(new Date()),
+        },
+      },
+    }),
+    prisma.planPurchase.count({ where: { tenantId } }),
+  ]);
+
+  const alreadyBootstrapped =
+    trainerCount >= TRAINER_SEEDS.length &&
+    planCount >= PLAN_SEEDS.length &&
+    shiftCount > 0 &&
+    purchaseCount > 0;
+
+  if (alreadyBootstrapped) {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { demoBootstrappedAt: new Date() },
+    });
+    return;
+  }
+
   const locations = await ensureLocations(tenantId);
   const trainers = await ensureTrainers(tenantId, locations);
   await ensurePlans(tenantId);
   await ensureShifts(tenantId, trainers, locations);
   const { customer } = await ensureDemoCustomer(tenantId);
   await ensureDemoPurchasesAndBookings(tenantId, customer.id, trainers, locations);
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { demoBootstrappedAt: new Date() },
+  });
 }
 
 async function ensureLocations(tenantId: string) {

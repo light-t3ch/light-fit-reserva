@@ -49,9 +49,15 @@ export type SlotDetail = {
   durationMinutes: number;
   creditType: SupportedCreditType;
   isBookable: boolean;
+  existingBookingId: string | null;
+  ownedByCurrentCustomer: boolean;
 };
 
-export async function getSlotDetail(tenantId: string, slotId: string): Promise<SlotDetail | null> {
+export async function getSlotDetail(
+  tenantId: string,
+  slotId: string,
+  options?: { customerUserId?: string },
+): Promise<SlotDetail | null> {
   const { trainerId, start } = parseSlotId(slotId);
 
   const shift = await prisma.trainerShift.findFirst({
@@ -78,6 +84,17 @@ export async function getSlotDetail(tenantId: string, slotId: string): Promise<S
     return null;
   }
 
+  let currentCustomerId: string | null = null;
+
+  if (options?.customerUserId) {
+    const customer = await prisma.customer.findFirst({
+      where: { tenantId, userId: options.customerUserId },
+      select: { id: true },
+    });
+
+    currentCustomerId = customer?.id ?? null;
+  }
+
   const existingBooking = await prisma.booking.findFirst({
     where: {
       tenantId,
@@ -85,8 +102,12 @@ export async function getSlotDetail(tenantId: string, slotId: string): Promise<S
       startsAt: slot.start,
       status: { in: [...BOOKED_STATUSES] },
     },
-    select: { id: true },
+    select: { id: true, customerId: true },
   });
+
+  const ownedByCurrentCustomer = Boolean(
+    existingBooking && currentCustomerId && existingBooking.customerId === currentCustomerId,
+  );
 
   return {
     slotId,
@@ -99,7 +120,9 @@ export async function getSlotDetail(tenantId: string, slotId: string): Promise<S
     end: slot.end,
     durationMinutes: slot.duration,
     creditType: slot.creditType,
-    isBookable: !existingBooking,
+    isBookable: !existingBooking || ownedByCurrentCustomer,
+    existingBookingId: existingBooking?.id ?? null,
+    ownedByCurrentCustomer,
   };
 }
 
@@ -177,7 +200,9 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
     throw new BookingError("CUSTOMER_NOT_FOUND", "お客様情報が見つかりませんでした。");
   }
 
-  const slotDetail = await getSlotDetail(customer.tenantId, options.slotId);
+  const slotDetail = await getSlotDetail(customer.tenantId, options.slotId, {
+    customerUserId: options.userId,
+  });
 
   if (!slotDetail) {
     throw new BookingError("SLOT_NOT_FOUND", "予約枠を取得できませんでした。");

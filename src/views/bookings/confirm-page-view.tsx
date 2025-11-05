@@ -55,10 +55,16 @@ export async function ConfirmBookingPageView({ searchParams, basePath }: Confirm
   }
 
   const tenantId = session.user.tenantId ?? "demo-tenant";
-  const slot = await getSlotDetail(tenantId, slotId);
+  const slot = await getSlotDetail(tenantId, slotId, {
+    customerUserId: session.user.id,
+  });
 
   if (!slot) {
     redirect(`${normalizedBasePath}?error=slot_missing`);
+  }
+
+  if (slot.ownedByCurrentCustomer && slot.existingBookingId) {
+    redirect(`${normalizedBasePath}/complete?bookingId=${slot.existingBookingId}`);
   }
 
   const errorKey = typeof searchParams?.error === "string" ? searchParams.error : undefined;
@@ -102,7 +108,7 @@ export async function ConfirmBookingPageView({ searchParams, basePath }: Confirm
               <dd className="text-base font-semibold">{slot.locationName}</dd>
             </div>
           </dl>
-          {!slot.isBookable && (
+          {!slot.isBookable && !slot.ownedByCurrentCustomer && (
             <p className="mt-6 rounded-2xl border border-dashed border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               大変申し訳ございません。こちらの枠はすでにご予約済みです。別の枠をご選択ください。
             </p>

@@ -1,3 +1,4 @@
+import { BookingStatus } from "@prisma/client";
 import { addMonths, set, startOfDay, startOfMonth, subHours } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
@@ -44,6 +45,12 @@ function parseSlotId(slotId: string): ParsedSlotId {
 
 const BOOKED_STATUSES = ["BOOKED", "PENDING_PAYMENT", "CHECKED_IN"] as const;
 export const CUSTOMER_CANCELLABLE_STATUSES = ["BOOKED", "PENDING_PAYMENT"] as const;
+
+export function isCustomerCancellableStatus(
+  status: BookingStatus,
+): status is (typeof CUSTOMER_CANCELLABLE_STATUSES)[number] {
+  return (CUSTOMER_CANCELLABLE_STATUSES as readonly BookingStatus[]).includes(status);
+}
 
 export type SlotDetail = {
   slotId: string;
@@ -338,7 +345,7 @@ export async function cancelBookingForCustomer(options: {
     throw new BookingError("BOOKING_NOT_FOUND", "該当する予約が見つかりませんでした。");
   }
 
-  if (!CUSTOMER_CANCELLABLE_STATUSES.includes(booking.status)) {
+  if (!isCustomerCancellableStatus(booking.status)) {
     throw new BookingError("BOOKING_NOT_CANCELLABLE", "この予約はキャンセルできません。");
   }
 

@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { CUSTOMER_CANCELLABLE_STATUSES, getCustomerCancellationWindows } from "@/server/bookings";
+import {
+  CUSTOMER_CANCELLABLE_STATUSES,
+  getCustomerCancellationWindows,
+  isCustomerCancellableStatus,
+} from "@/server/bookings";
 
 export type CustomerUpcomingSession = {
   id: string;
@@ -67,7 +71,7 @@ export async function getCustomerUpcomingSessions(
       const { cancelUntil, refundUntil } = getCustomerCancellationWindows(booking.startsAt);
       const now = new Date();
       const canCancel =
-        CUSTOMER_CANCELLABLE_STATUSES.includes(booking.status) && now <= cancelUntil;
+        isCustomerCancellableStatus(booking.status) && now <= cancelUntil;
       const refundEligible = now < refundUntil;
 
       return {

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { CUSTOMER_CANCELLABLE_STATUSES, getCustomerCancellationWindows } from "@/server/bookings";
 
 export type CustomerUpcomingSession = {
   id: string;
@@ -7,6 +8,10 @@ export type CustomerUpcomingSession = {
   menu: string;
   start: string;
   status: "BOOKED" | "PENDING" | "COMPLETED" | "CANCELLED";
+  canCancel: boolean;
+  refundEligible: boolean;
+  cancellationDeadline: string;
+  refundDeadline: string;
 };
 
 const UPCOMING_STATUSES = ["BOOKED", "PENDING_PAYMENT"] as const;
@@ -58,5 +63,19 @@ export async function getCustomerUpcomingSessions(
           : "予約"),
     start: booking.startsAt.toISOString(),
     status: booking.status === "PENDING_PAYMENT" ? "PENDING" : "BOOKED",
+    ...(() => {
+      const { cancelUntil, refundUntil } = getCustomerCancellationWindows(booking.startsAt);
+      const now = new Date();
+      const canCancel =
+        CUSTOMER_CANCELLABLE_STATUSES.includes(booking.status) && now <= cancelUntil;
+      const refundEligible = now < refundUntil;
+
+      return {
+        canCancel,
+        refundEligible,
+        cancellationDeadline: cancelUntil.toISOString(),
+        refundDeadline: refundUntil.toISOString(),
+      };
+    })(),
   }));
 }

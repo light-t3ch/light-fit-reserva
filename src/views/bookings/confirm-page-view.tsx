@@ -129,7 +129,8 @@ export async function ConfirmBookingPageView({ searchParams, basePath }: Confirm
                 この内容で予約する
               </button>
               <p className="text-xs text-slate-500">
-                予約確定後、利用可能チケットから自動的に1枠分が減算されます。前日22時以降のキャンセルは消化扱いとなります。
+                予約確定後、利用可能チケットから自動的に1枠分が減算されます。当日22時まではマイページからキャンセル可能で
+                すが、それ以降はチケット消化扱いとなります。
               </p>
             </form>
           )}

@@ -1,4 +1,4 @@
-import { addMonths, startOfMonth } from "date-fns";
+import { addMonths, set, startOfDay, startOfMonth, subHours } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
 import { generateShiftSlots } from "@/server/bootstrap";
@@ -8,7 +8,14 @@ type SupportedCreditType = "PT_55" | "PT_25" | "COUNSELING" | "TRIAL_90" | "ENRO
 
 export class BookingError extends Error {
   constructor(
-    public code: "SLOT_NOT_FOUND" | "SLOT_UNAVAILABLE" | "NO_AVAILABLE_CREDIT" | "CUSTOMER_NOT_FOUND",
+    public code:
+      | "SLOT_NOT_FOUND"
+      | "SLOT_UNAVAILABLE"
+      | "NO_AVAILABLE_CREDIT"
+      | "CUSTOMER_NOT_FOUND"
+      | "BOOKING_NOT_FOUND"
+      | "BOOKING_NOT_CANCELLABLE"
+      | "CANCELLATION_WINDOW_CLOSED",
     message: string,
   ) {
     super(message);
@@ -36,6 +43,7 @@ function parseSlotId(slotId: string): ParsedSlotId {
 }
 
 const BOOKED_STATUSES = ["BOOKED", "PENDING_PAYMENT", "CHECKED_IN"] as const;
+export const CUSTOMER_CANCELLABLE_STATUSES = ["BOOKED", "PENDING_PAYMENT"] as const;
 
 export type SlotDetail = {
   slotId: string;
@@ -131,6 +139,13 @@ type CreditCandidate = {
   planPurchaseId: string | null;
   remaining: number;
 };
+
+export function getCustomerCancellationWindows(startsAt: Date) {
+  const cancelUntil = set(startsAt, { hours: 22, minutes: 0, seconds: 0, milliseconds: 0 });
+  const refundUntil = subHours(startOfDay(startsAt), 2);
+
+  return { cancelUntil, refundUntil };
+}
 
 function determineBucketPriority(start: Date): SupportedCreditBucket[] {
   const now = new Date();
@@ -291,4 +306,89 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
   });
 
   return booking;
+}
+
+export async function cancelBookingForCustomer(options: {
+  bookingId: string;
+  userId: string;
+  reason?: string;
+}) {
+  const customer = await findCustomer(options.userId);
+
+  if (!customer) {
+    throw new BookingError("CUSTOMER_NOT_FOUND", "お客様情報が見つかりませんでした。");
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: options.bookingId,
+      tenantId: customer.tenantId,
+      customerId: customer.id,
+    },
+    include: {
+      ledgerEntries: {
+        where: { eventType: "BOOKING_CONSUME" },
+        orderBy: { occurredAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+
+  if (!booking) {
+    throw new BookingError("BOOKING_NOT_FOUND", "該当する予約が見つかりませんでした。");
+  }
+
+  if (!CUSTOMER_CANCELLABLE_STATUSES.includes(booking.status)) {
+    throw new BookingError("BOOKING_NOT_CANCELLABLE", "この予約はキャンセルできません。");
+  }
+
+  const { cancelUntil, refundUntil } = getCustomerCancellationWindows(booking.startsAt);
+  const now = new Date();
+
+  if (now > cancelUntil) {
+    throw new BookingError(
+      "CANCELLATION_WINDOW_CLOSED",
+      "キャンセル可能な時間を過ぎています。店舗までお問い合わせください。",
+    );
+  }
+
+  const consumeLedger = booking.ledgerEntries[0];
+  const shouldRestoreCredit = Boolean(consumeLedger) && now < refundUntil;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: "CANCELLED",
+        cancellationReason: options.reason ?? "お客様によるキャンセル",
+        cancelledAt: now,
+      },
+    });
+
+    if (shouldRestoreCredit && consumeLedger) {
+      await tx.creditLedgerEntry.create({
+        data: {
+          tenantId: booking.tenantId,
+          customerId: booking.customerId,
+          planPurchaseId: consumeLedger.planPurchaseId ?? undefined,
+          bookingId: booking.id,
+          bucket: consumeLedger.bucket,
+          creditType: booking.creditType,
+          quantity: 1,
+          eventType: "BOOKING_RELEASE",
+          occurredAt: now,
+          memo: "お客様キャンセルによる返却",
+        },
+      });
+    }
+
+    return updated;
+  });
+
+  return {
+    booking: result,
+    creditRestored: shouldRestoreCredit,
+    cancelDeadline: cancelUntil,
+    refundDeadline: refundUntil,
+  };
 }

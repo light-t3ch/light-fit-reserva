@@ -24,40 +24,83 @@ function runPrisma(args, options = {}) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(
+    const error = new Error(
       `[run-migrate-deploy] prisma ${args.join(' ')} が異常終了しました (exit=${result.status}).\n${result.stderr}`,
     );
+    error.stdout = result.stdout;
+    error.stderr = result.stderr;
+    error.exitCode = result.status;
+    throw error;
   }
   return result.stdout;
+}
+
+function parseFailedMigrationsFromText(output = '') {
+  const failed = [];
+  const lines = output.split(/\r?\n/);
+  let collecting = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!collecting) {
+      if (/have failed/i.test(line) || /failed migrations/i.test(line)) {
+        collecting = true;
+      }
+      continue;
+    }
+    if (!line) {
+      break;
+    }
+    const match = line.match(/^[-•]\s*(.+)$/);
+    if (match) {
+      failed.push(match[1].trim());
+      continue;
+    }
+    if (!/^[-•]/.test(line)) {
+      break;
+    }
+  }
+  return failed;
 }
 
 const env = { ...process.env };
 env.DATABASE_URL = ensureSslMode(env.DATABASE_URL, 'DATABASE_URL');
 env.DIRECT_URL = ensureSslMode(env.DIRECT_URL, 'DIRECT_URL');
 
-let statusOutput;
+let failedMigrations = [];
 try {
-  statusOutput = runPrisma(['migrate', 'status', '--json'], { env });
-} catch (error) {
-  console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', error);
-  exit(1);
-}
-
-try {
+  const statusOutput = runPrisma(['migrate', 'status', '--json'], { env });
   const parsed = JSON.parse(statusOutput ?? '{}');
   const failed = parsed.failedMigrationNames;
-  if (Array.isArray(failed) && failed.length > 0) {
-    console.warn(
-      `\n[run-migrate-deploy] 過去に失敗したマイグレーションを検出しました: ${failed.join(', ')}\n` +
-        '  prisma migrate resolve --rolled-back <name> を自動実行します。',
-    );
-    for (const name of failed) {
-      runPrisma(['migrate', 'resolve', '--rolled-back', name], { env });
-    }
+  if (Array.isArray(failed)) {
+    failedMigrations = failed;
   }
 } catch (error) {
-  console.error('\n[run-migrate-deploy] migrate status の解析に失敗しました。', error);
-  exit(1);
+  const message = error?.message ?? '';
+  if (/unknown or unexpected option:\s*--json/i.test(message)) {
+    console.warn(
+      '\n[run-migrate-deploy] prisma migrate status --json が利用できないため、テキスト出力で解析します。',
+    );
+    try {
+      const fallbackOutput = error.stdout ?? runPrisma(['migrate', 'status'], { env });
+      failedMigrations = parseFailedMigrationsFromText(fallbackOutput);
+    } catch (fallbackError) {
+      console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', fallbackError);
+      exit(1);
+    }
+  } else {
+    console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', error);
+    exit(1);
+  }
+}
+
+if (failedMigrations.length > 0) {
+  console.warn(
+    `\n[run-migrate-deploy] 過去に失敗したマイグレーションを検出しました: ${failedMigrations.join(', ')}\n` +
+      '  prisma migrate resolve --rolled-back <name> を自動実行します。',
+  );
+  for (const name of failedMigrations) {
+    runPrisma(['migrate', 'resolve', '--rolled-back', name], { env });
+  }
 }
 
 const child = spawn('npx', ['prisma', 'migrate', 'deploy'], {

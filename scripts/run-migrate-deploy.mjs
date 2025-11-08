@@ -15,7 +15,7 @@ function ensureSslMode(url, label) {
   return normalized;
 }
 
-function runPrisma(args, options = {}) {
+function runPrismaRaw(args, options = {}) {
   const result = spawnSync('npx', ['prisma', ...args], {
     encoding: 'utf8',
     ...options,
@@ -23,6 +23,11 @@ function runPrisma(args, options = {}) {
   if (result.error) {
     throw result.error;
   }
+  return result;
+}
+
+function runPrisma(args, options = {}) {
+  const result = runPrismaRaw(args, options);
   if (result.status !== 0) {
     const error = new Error(
       `[run-migrate-deploy] prisma ${args.join(' ')} が異常終了しました (exit=${result.status}).\n${result.stderr}`,
@@ -87,7 +92,15 @@ try {
   try {
     const fallbackOutput = error?.stdout && error.stdout.length > 0
       ? error.stdout
-      : runPrisma(['migrate', 'status'], { env });
+      : (() => {
+          const result = runPrismaRaw(['migrate', 'status'], { env });
+          if (result.status !== 0) {
+            console.warn(
+              `\n[run-migrate-deploy] prisma migrate status が exit=${result.status} で終了しましたが、標準出力から解析を続行します。`,
+            );
+          }
+          return result.stdout;
+        })();
     failedMigrations = parseFailedMigrationsFromText(fallbackOutput);
   } catch (fallbackError) {
     console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', fallbackError);

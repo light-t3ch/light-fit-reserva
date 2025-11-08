@@ -90,16 +90,30 @@ try {
     `\n[run-migrate-deploy] prisma migrate status --json が失敗しました (${message || '詳細不明'}). テキスト出力から解析を試みます。`,
   );
   try {
-    const fallbackOutput = error?.stdout && error.stdout.length > 0
-      ? error.stdout
+    const rawOutputChunks = [];
+    if (error?.stdout && error.stdout.length > 0) {
+      rawOutputChunks.push(error.stdout);
+    }
+    if (error?.stderr && error.stderr.length > 0) {
+      rawOutputChunks.push(error.stderr);
+    }
+
+    const fallbackOutput = rawOutputChunks.length > 0
+      ? rawOutputChunks.join('\n')
       : (() => {
           const result = runPrismaRaw(['migrate', 'status'], { env });
+          if (result.stdout && result.stdout.length > 0) {
+            rawOutputChunks.push(result.stdout);
+          }
+          if (result.stderr && result.stderr.length > 0) {
+            rawOutputChunks.push(result.stderr);
+          }
           if (result.status !== 0) {
             console.warn(
-              `\n[run-migrate-deploy] prisma migrate status が exit=${result.status} で終了しましたが、標準出力から解析を続行します。`,
+              `\n[run-migrate-deploy] prisma migrate status が exit=${result.status} で終了しましたが、出力から解析を続行します。`,
             );
           }
-          return result.stdout;
+          return rawOutputChunks.join('\n');
         })();
     failedMigrations = parseFailedMigrationsFromText(fallbackOutput);
   } catch (fallbackError) {

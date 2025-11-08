@@ -65,11 +65,16 @@ function parseFailedMigrationsFromText(output = '') {
       failed.push(directMatch[1].trim());
       continue;
     }
+    const backtickMatch = line.match(/`([^`]+)`/);
+    if (backtickMatch) {
+      failed.push(backtickMatch[1].trim());
+      continue;
+    }
     if (!/^[-•]/.test(line)) {
       continue;
     }
   }
-  return failed;
+  return Array.from(new Set(failed));
 }
 
 const env = { ...process.env };

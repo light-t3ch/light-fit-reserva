@@ -25,10 +25,16 @@ export async function getCustomerUpcomingSessions(
 ): Promise<CustomerUpcomingSession[]> {
   const customer = await prisma.customer.findFirst({
     where: { userId },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, locationId: true },
   });
 
   if (!customer) {
+    return [];
+  }
+
+  const targetLocationId = customer.locationId;
+
+  if (!targetLocationId) {
     return [];
   }
 
@@ -36,6 +42,7 @@ export async function getCustomerUpcomingSessions(
     where: {
       customerId: customer.id,
       tenantId: customer.tenantId,
+      locationId: targetLocationId,
       status: { in: [...UPCOMING_STATUSES] },
       startsAt: {
         gte: new Date(),

@@ -395,18 +395,27 @@ async function ensureDemoPurchasesAndBookings(
     {
       planSlug: "pt-55-monthly-4",
       amount: 39600,
+      locationSlug: "awaza",
     },
     {
       planSlug: "pt-25-monthly-4",
       amount: 26400,
+      locationSlug: "fukushima",
     },
   ];
 
-  const purchases = [] as { planSlug: string; purchaseId: string }[];
+  const purchases = [] as { planSlug: string; purchaseId: string; locationId: string }[];
 
   for (const seed of subscriptionSeeds) {
     const plan = planMap[seed.planSlug];
     if (!plan) continue;
+
+    const targetLocationId =
+      locations[seed.locationSlug]?.id ?? Object.values(locations)[0]?.id;
+
+    if (!targetLocationId) {
+      continue;
+    }
 
     let purchase = await prisma.planPurchase.findFirst({
       where: {
@@ -423,6 +432,7 @@ async function ensureDemoPurchasesAndBookings(
           tenantId,
           customerId,
           planId: plan.id,
+          locationId: targetLocationId,
           billingCadence: plan.billingCadence,
           status: "active",
           currentPeriodStart,
@@ -435,9 +445,14 @@ async function ensureDemoPurchasesAndBookings(
           },
         },
       });
+    } else if (purchase.locationId !== targetLocationId) {
+      purchase = await prisma.planPurchase.update({
+        where: { id: purchase.id },
+        data: { locationId: targetLocationId },
+      });
     }
 
-    purchases.push({ planSlug: seed.planSlug, purchaseId: purchase.id });
+    purchases.push({ planSlug: seed.planSlug, purchaseId: purchase.id, locationId: targetLocationId });
   }
 
   const bookingSeeds = [
@@ -459,7 +474,12 @@ async function ensureDemoPurchasesAndBookings(
     },
   ];
 
-  const bookings = [] as { id: string; planSlug: string; creditType: "PT_55" | "PT_25" }[];
+  const bookings = [] as {
+    id: string;
+    planSlug: string;
+    creditType: "PT_55" | "PT_25";
+    locationId: string;
+  }[];
 
   for (const seed of bookingSeeds) {
     const purchase = purchases.find((p) => p.planSlug === seed.planSlug);
@@ -471,10 +491,23 @@ async function ensureDemoPurchasesAndBookings(
         customerId,
         startsAt: seed.start,
       },
+      select: { id: true, locationId: true },
     });
 
     if (existing) {
-      bookings.push({ id: existing.id, planSlug: seed.planSlug, creditType: seed.creditType });
+      bookings.push({
+        id: existing.id,
+        planSlug: seed.planSlug,
+        creditType: seed.creditType,
+        locationId: existing.locationId,
+      });
+      continue;
+    }
+
+    const bookingLocationId =
+      locations[seed.locationSlug]?.id ?? Object.values(locations)[0]?.id;
+
+    if (!bookingLocationId) {
       continue;
     }
 
@@ -482,7 +515,7 @@ async function ensureDemoPurchasesAndBookings(
       data: {
         tenantId,
         customerId,
-        locationId: locations[seed.locationSlug]?.id ?? Object.values(locations)[0]?.id,
+        locationId: bookingLocationId,
         trainerId: trainers[seed.trainerEmail]?.id,
         planPurchaseId: purchase.purchaseId,
         creditType: seed.creditType,
@@ -493,7 +526,12 @@ async function ensureDemoPurchasesAndBookings(
       },
     });
 
-    bookings.push({ id: booking.id, planSlug: seed.planSlug, creditType: seed.creditType });
+    bookings.push({
+      id: booking.id,
+      planSlug: seed.planSlug,
+      creditType: seed.creditType,
+      locationId: bookingLocationId,
+    });
   }
 
   await ensureLedgerEntries(tenantId, customerId, purchases, bookings, currentPeriodStart);
@@ -502,8 +540,8 @@ async function ensureDemoPurchasesAndBookings(
 async function ensureLedgerEntries(
   tenantId: string,
   customerId: string,
-  purchases: { planSlug: string; purchaseId: string }[],
-  bookings: { id: string; planSlug: string; creditType: "PT_55" | "PT_25" }[],
+  purchases: { planSlug: string; purchaseId: string; locationId: string }[],
+  bookings: { id: string; planSlug: string; creditType: "PT_55" | "PT_25"; locationId: string }[],
   currentPeriodStart: Date,
 ) {
   const existingCount = await prisma.creditLedgerEntry.count({
@@ -535,6 +573,7 @@ async function ensureLedgerEntries(
       tenantId,
       customerId,
       planPurchaseId: purchase.purchaseId,
+      locationId: purchase.locationId,
       bucket: "CURRENT",
       creditType,
       quantity: allocationQuantity,
@@ -547,6 +586,7 @@ async function ensureLedgerEntries(
       tenantId,
       customerId,
       planPurchaseId: purchase.purchaseId,
+      locationId: purchase.locationId,
       bucket: "NEXT",
       creditType,
       quantity: allocationQuantity,
@@ -557,11 +597,13 @@ async function ensureLedgerEntries(
   }
 
   for (const booking of bookings) {
+    const matchedPurchase = purchases.find((p) => p.planSlug === booking.planSlug);
     entries.push({
       tenantId,
       customerId,
-      planPurchaseId: purchases.find((p) => p.planSlug === booking.planSlug)?.purchaseId,
+      planPurchaseId: matchedPurchase?.purchaseId,
       bookingId: booking.id,
+      locationId: booking.locationId,
       bucket: "CURRENT",
       creditType: booking.creditType,
       quantity: -1,

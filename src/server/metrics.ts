@@ -47,7 +47,7 @@ export async function getRevenueBreakdown(
   const purchases = await prisma.planPurchase.findMany({
     where: {
       tenantId,
-      ...(options?.locationId ? { customer: { locationId: options.locationId } } : {}),
+      ...(options?.locationId ? { locationId: options.locationId } : {}),
       OR: [
         { currentPeriodStart: { gte: previousMonthStart } },
         { createdAt: { gte: previousMonthStart } },

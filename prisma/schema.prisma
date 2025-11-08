@@ -97,6 +97,8 @@ model Location {
   closures  ScheduleClosure[]
   customers Customer[]
   admins    User[]    @relation("LocationAdmins")
+  planPurchases       PlanPurchase[]
+  creditLedgerEntries CreditLedgerEntry[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -220,6 +222,7 @@ model PlanPurchase {
   tenantId             String
   customerId           String
   planId               String
+  locationId           String
   billingCadence       BillingCadence
   status               String                @default("active")
   currentPeriodStart   DateTime?
@@ -231,12 +234,13 @@ model PlanPurchase {
   tenant               Tenant                @relation(fields: [tenantId], references: [id])
   customer             Customer              @relation(fields: [customerId], references: [id])
   plan                 Plan                  @relation(fields: [planId], references: [id])
+  location             Location              @relation(fields: [locationId], references: [id])
   ledgerEntries        CreditLedgerEntry[]
   bookings             Booking[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
-  @@index([tenantId, customerId])
+  @@index([tenantId, customerId, locationId])
   @@index([stripeSubscriptionId])
 }
 
@@ -246,6 +250,7 @@ model CreditLedgerEntry {
   customerId      String
   planPurchaseId  String?
   bookingId       String?
+  locationId      String
   bucket          CreditBucket
   creditType      SessionCategory
   quantity        Int
@@ -256,9 +261,10 @@ model CreditLedgerEntry {
   customer        Customer              @relation(fields: [customerId], references: [id])
   planPurchase    PlanPurchase?         @relation(fields: [planPurchaseId], references: [id])
   booking         Booking?              @relation(fields: [bookingId], references: [id])
+  location        Location              @relation(fields: [locationId], references: [id])
   createdAt       DateTime              @default(now())
 
-  @@index([tenantId, customerId, occurredAt])
+  @@index([tenantId, customerId, locationId, occurredAt])
   @@index([bookingId])
 }
 

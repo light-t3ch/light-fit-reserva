@@ -89,7 +89,7 @@ export async function BookingPageView({ searchParams, basePath }: BookingPageVie
           </section>
           <aside className="space-y-6">
             <Suspense fallback={<div className="rounded-3xl bg-white p-6 shadow-sm">読み込み中...</div>}>
-              <BookingSummary userId={userId} />
+              <BookingSummary userId={userId} locationId={locationId} />
             </Suspense>
           </aside>
         </div>

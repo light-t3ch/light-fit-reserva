@@ -200,15 +200,17 @@ async function findCustomer(userId: string) {
 async function resolveCredit(
   customerId: string,
   tenantId: string,
+  locationId: string,
   creditType: SupportedCreditType,
   slotStart: Date,
 ): Promise<CreditCandidate | null> {
   const creditGroups = await prisma.creditLedgerEntry.groupBy({
-    by: ["bucket", "creditType", "planPurchaseId"],
+    by: ["bucket", "creditType", "planPurchaseId", "locationId"],
     where: {
       tenantId,
       customerId,
       creditType,
+      locationId,
     },
     _sum: { quantity: true },
     orderBy: { bucket: "asc" },
@@ -285,7 +287,13 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
     throw new BookingError("SLOT_UNAVAILABLE", "選択した枠はすでに予約済みです。");
   }
 
-  const credit = await resolveCredit(customer.id, customer.tenantId, slotDetail.creditType, slotDetail.start);
+  const credit = await resolveCredit(
+    customer.id,
+    customer.tenantId,
+    customer.locationId,
+    slotDetail.creditType,
+    slotDetail.start,
+  );
 
   if (!credit) {
     throw new BookingError("NO_AVAILABLE_CREDIT", "利用可能なチケットがありません。");
@@ -327,6 +335,7 @@ export async function createBookingFromSlot(options: { slotId: string; userId: s
         customerId: customer.id,
         planPurchaseId: credit.planPurchaseId ?? undefined,
         bookingId: createdBooking.id,
+        locationId: slotDetail.locationId,
         bucket: credit.bucket,
         creditType: slotDetail.creditType,
         quantity: -1,
@@ -416,6 +425,7 @@ export async function cancelBookingForCustomer(options: {
           customerId: booking.customerId,
           planPurchaseId: consumeLedger.planPurchaseId ?? undefined,
           bookingId: booking.id,
+          locationId: booking.locationId,
           bucket: consumeLedger.bucket,
           creditType: booking.creditType,
           quantity: 1,

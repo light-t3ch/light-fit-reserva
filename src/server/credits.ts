@@ -12,13 +12,22 @@ export type CreditSummary = {
   rolloverEligible: boolean;
 };
 
-export async function getCustomerCreditSummary(userId: string): Promise<CreditSummary[]> {
+export async function getCustomerCreditSummary(
+  userId: string,
+  options?: { locationId?: string | null },
+): Promise<CreditSummary[]> {
   const customer = await prisma.customer.findFirst({
     where: { userId },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, locationId: true },
   });
 
   if (!customer) {
+    return [];
+  }
+
+  const targetLocationId = options?.locationId ?? customer.locationId;
+
+  if (!targetLocationId) {
     return [];
   }
 
@@ -26,6 +35,7 @@ export async function getCustomerCreditSummary(userId: string): Promise<CreditSu
     where: {
       customerId: customer.id,
       tenantId: customer.tenantId,
+      locationId: targetLocationId,
     },
     orderBy: { occurredAt: "asc" },
   });

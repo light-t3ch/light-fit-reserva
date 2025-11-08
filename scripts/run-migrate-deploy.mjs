@@ -53,7 +53,7 @@ function parseFailedMigrationsFromText(output = '') {
       continue;
     }
     if (!line) {
-      break;
+      continue;
     }
     const bulletMatch = line.match(/^[-•]\s*(.+)$/);
     if (bulletMatch) {
@@ -66,7 +66,7 @@ function parseFailedMigrationsFromText(output = '') {
       continue;
     }
     if (!/^[-•]/.test(line)) {
-      break;
+      continue;
     }
   }
   return failed;

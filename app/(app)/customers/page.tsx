@@ -61,7 +61,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       where: { tenantId, locationId },
       include: {
         user: { select: { email: true } },
-        location: { select: { name: true } },
+        location: { select: { id: true, name: true } },
       },
       orderBy: [
         { lastName: "asc" },

@@ -75,20 +75,17 @@ try {
     failedMigrations = failed;
   }
 } catch (error) {
-  const message = error?.message ?? '';
-  if (/unknown or unexpected option:\s*--json/i.test(message)) {
-    console.warn(
-      '\n[run-migrate-deploy] prisma migrate status --json が利用できないため、テキスト出力で解析します。',
-    );
-    try {
-      const fallbackOutput = error.stdout ?? runPrisma(['migrate', 'status'], { env });
-      failedMigrations = parseFailedMigrationsFromText(fallbackOutput);
-    } catch (fallbackError) {
-      console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', fallbackError);
-      exit(1);
-    }
-  } else {
-    console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', error);
+  const message = (error?.message ?? '').trim();
+  console.warn(
+    `\n[run-migrate-deploy] prisma migrate status --json が失敗しました (${message || '詳細不明'}). テキスト出力から解析を試みます。`,
+  );
+  try {
+    const fallbackOutput = error?.stdout && error.stdout.length > 0
+      ? error.stdout
+      : runPrisma(['migrate', 'status'], { env });
+    failedMigrations = parseFailedMigrationsFromText(fallbackOutput);
+  } catch (fallbackError) {
+    console.error('\n[run-migrate-deploy] prisma migrate status の取得に失敗しました。', fallbackError);
     exit(1);
   }
 }

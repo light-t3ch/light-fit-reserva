@@ -40,9 +40,13 @@ function runPrisma(args, options = {}) {
   return result.stdout;
 }
 
+function stripAnsi(value = '') {
+  return value.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
 function parseFailedMigrationsFromText(output = '') {
   const failed = [];
-  const lines = output.split(/\r?\n/);
+  const lines = stripAnsi(output).split(/\r?\n/);
   let collecting = false;
   for (const rawLine of lines) {
     const line = rawLine.trim();

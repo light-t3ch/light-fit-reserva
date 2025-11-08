@@ -29,14 +29,13 @@ FROM first_locations AS fl
 WHERE pp."locationId" IS NULL
   AND fl."tenantId" = pp."tenantId";
 
--- Populate CreditLedgerEntry.locationId prioritising booking, then plan purchase, then customer
 UPDATE "CreditLedgerEntry" AS cle
-SET "locationId" = COALESCE(b."locationId", pp."locationId", c."locationId")
-FROM "Customer" AS c
-LEFT JOIN "PlanPurchase" AS pp ON pp."id" = cle."planPurchaseId"
-LEFT JOIN "Booking" AS b ON b."id" = cle."bookingId"
-WHERE c."id" = cle."customerId"
-  AND cle."locationId" IS NULL;
+SET "locationId" = COALESCE(
+    (SELECT b."locationId" FROM "Booking" AS b WHERE b."id" = cle."bookingId"),
+    (SELECT pp."locationId" FROM "PlanPurchase" AS pp WHERE pp."id" = cle."planPurchaseId"),
+    (SELECT c."locationId" FROM "Customer" AS c WHERE c."id" = cle."customerId")
+  )
+WHERE cle."locationId" IS NULL;
 
 -- Final fallback for credit ledger entries without a resolved location
 WITH first_locations AS (

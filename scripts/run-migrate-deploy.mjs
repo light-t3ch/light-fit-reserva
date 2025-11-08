@@ -45,40 +45,9 @@ function stripAnsi(value = '') {
 }
 
 function parseFailedMigrationsFromText(output = '') {
-  const failed = [];
-  const lines = stripAnsi(output).split(/\r?\n/);
-  let collecting = false;
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!collecting) {
-      if (/have failed/i.test(line) || /failed migrations/i.test(line)) {
-        collecting = true;
-      }
-      continue;
-    }
-    if (!line) {
-      continue;
-    }
-    const bulletMatch = line.match(/^[-•]\s*(.+)$/);
-    if (bulletMatch) {
-      failed.push(bulletMatch[1].trim());
-      continue;
-    }
-    const directMatch = line.match(/^(\d{4,}_\S+)/);
-    if (directMatch) {
-      failed.push(directMatch[1].trim());
-      continue;
-    }
-    const backtickMatch = line.match(/`([^`]+)`/);
-    if (backtickMatch) {
-      failed.push(backtickMatch[1].trim());
-      continue;
-    }
-    if (!/^[-•]/.test(line)) {
-      continue;
-    }
-  }
-  return Array.from(new Set(failed));
+  const cleaned = stripAnsi(output);
+  const matches = cleaned.match(/\b\d{8,}_[A-Za-z0-9_-]+/g) ?? [];
+  return Array.from(new Set(matches));
 }
 
 const env = { ...process.env };

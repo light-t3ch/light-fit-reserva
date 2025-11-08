@@ -50,9 +50,14 @@ function parseFailedMigrationsFromText(output = '') {
     if (!line) {
       break;
     }
-    const match = line.match(/^[-•]\s*(.+)$/);
-    if (match) {
-      failed.push(match[1].trim());
+    const bulletMatch = line.match(/^[-•]\s*(.+)$/);
+    if (bulletMatch) {
+      failed.push(bulletMatch[1].trim());
+      continue;
+    }
+    const directMatch = line.match(/^(\d{4,}_\S+)/);
+    if (directMatch) {
+      failed.push(directMatch[1].trim());
       continue;
     }
     if (!/^[-•]/.test(line)) {

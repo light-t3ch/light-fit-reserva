@@ -3,16 +3,25 @@ import { Suspense } from "react";
 import { SignInForm } from "@/components/auth/sign-in-form";
 
 import { prisma } from "@/lib/prisma";
+import { ensureLocations } from "@/server/bootstrap";
 
 async function getLocationOptions() {
-  const locations = await prisma.location.findMany({
-    select: { slug: true, name: true },
-    orderBy: { name: "asc" },
+  const tenantSlug = process.env.APP_TENANT_SLUG ?? "light-fit";
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: tenantSlug },
+    update: {},
+    create: {
+      slug: tenantSlug,
+      name: "Light Fit Reserva",
+    },
   });
 
-  return locations
+  const locationMap = await ensureLocations(tenant.id);
+
+  return Object.values(locationMap)
     .filter((location) => Boolean(location.slug && location.name))
-    .map((location) => ({ slug: location.slug, label: location.name }));
+    .map((location) => ({ slug: location.slug, label: location.name }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ja"));
 }
 
 export default async function SignInPage() {

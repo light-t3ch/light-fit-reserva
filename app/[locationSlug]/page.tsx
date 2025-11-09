@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { prisma } from "@/lib/prisma";
+import { ensureLocations } from "@/server/bootstrap";
 
 interface StoreSignInPageProps {
   params: {
@@ -14,8 +15,20 @@ interface StoreSignInPageProps {
 async function getLocation(slug: string) {
   const normalized = slug.toLowerCase();
 
+  const tenantSlug = process.env.APP_TENANT_SLUG ?? "light-fit";
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: tenantSlug },
+    update: {},
+    create: {
+      slug: tenantSlug,
+      name: "Light Fit Reserva",
+    },
+  });
+
+  await ensureLocations(tenant.id);
+
   const location = await prisma.location.findFirst({
-    where: { slug: normalized },
+    where: { slug: normalized, tenantId: tenant.id },
     select: { slug: true, name: true, address: true },
   });
 

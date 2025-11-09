@@ -138,7 +138,7 @@ export async function ensureDemoTenantData(tenantId: string) {
 
 type LocationMap = Record<string, { id: string; name: string; slug: string }>;
 
-async function ensureLocations(tenantId: string): Promise<LocationMap> {
+export async function ensureLocations(tenantId: string): Promise<LocationMap> {
   const existing = await prisma.location.findMany({ where: { tenantId } });
 
   const bySlug = new Map(existing.map((location) => [location.slug, location] as const));

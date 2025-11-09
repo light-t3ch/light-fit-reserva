@@ -6,19 +6,16 @@ import { FormEvent, useEffect, useState } from "react";
 
 type Audience = "ADMIN" | "CUSTOMER";
 
-const LOCATION_OPTIONS = [
-  { slug: "noda-hanshin", label: "野田阪神店" },
-  { slug: "fukushima", label: "福島店" },
-  { slug: "awaza", label: "阿波座店" },
-  { slug: "ebie", label: "海老江店" },
-  { slug: "kujo", label: "九条店" },
-  { slug: "higobashi", label: "肥後橋店" },
-  { slug: "tsukamoto", label: "塚本店" },
-  { slug: "temma", label: "天満店" },
-  { slug: "tamatsukuri", label: "玉造店" },
-];
+type LocationOption = {
+  slug: string;
+  label: string;
+};
 
-export function SignInForm() {
+interface SignInFormProps {
+  locationOptions: LocationOption[];
+}
+
+export function SignInForm({ locationOptions }: SignInFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,22 +119,28 @@ export function SignInForm() {
         <label htmlFor="locationSlug" className="block text-sm font-medium text-slate-700">
           ご利用店舗
         </label>
-        <select
-          id="locationSlug"
-          name="locationSlug"
-          required={isAdmin}
-          defaultValue=""
-          className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="" disabled>
-            店舗を選択してください
-          </option>
-          {LOCATION_OPTIONS.map((option) => (
-            <option key={option.slug} value={option.slug}>
-              {option.label}
+        {locationOptions.length > 0 ? (
+          <select
+            id="locationSlug"
+            name="locationSlug"
+            required={isAdmin}
+            defaultValue=""
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="" disabled>
+              店舗を選択してください
             </option>
-          ))}
-        </select>
+            {locationOptions.map((option) => (
+              <option key={option.slug} value={option.slug}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            選択可能な店舗がまだ登録されていません。管理者にお問い合わせください。
+          </div>
+        )}
         <p className="text-xs text-slate-500">
           {isAdmin
             ? "管理者ログインでは操作する店舗を必ず選択してください。"

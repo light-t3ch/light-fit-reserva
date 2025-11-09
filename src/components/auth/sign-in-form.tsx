@@ -13,28 +13,44 @@ type LocationOption = {
 
 interface SignInFormProps {
   locationOptions: LocationOption[];
+  defaultLocationSlug?: string;
+  lockLocation?: boolean;
+  forceAudience?: Audience;
 }
 
-export function SignInForm({ locationOptions }: SignInFormProps) {
+export function SignInForm({
+  locationOptions,
+  defaultLocationSlug,
+  lockLocation = false,
+  forceAudience,
+}: SignInFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audience, setAudience] = useState<Audience>("ADMIN");
+  const [audience, setAudience] = useState<Audience>(forceAudience ?? "ADMIN");
 
   useEffect(() => {
+    if (forceAudience) {
+      setAudience(forceAudience);
+      return;
+    }
     const preset = searchParams.get("audience");
     if (preset?.toLowerCase() === "customer") {
       setAudience("CUSTOMER");
     }
-  }, [searchParams]);
+  }, [searchParams, forceAudience]);
+
+  const effectiveLocationSlug =
+    defaultLocationSlug ??
+    (locationOptions.length === 1 ? locationOptions[0]?.slug : undefined);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
-    const locationSlug = formData.get("locationSlug");
+    const submittedLocationSlug = formData.get("locationSlug");
     const targetAudience = audience;
 
     setIsSubmitting(true);
@@ -45,7 +61,9 @@ export function SignInForm({ locationOptions }: SignInFormProps) {
       password,
       audience: targetAudience,
       locationSlug:
-        typeof locationSlug === "string" && locationSlug.length > 0 ? locationSlug : undefined,
+        typeof submittedLocationSlug === "string" && submittedLocationSlug.length > 0
+          ? submittedLocationSlug
+          : effectiveLocationSlug,
       redirect: false,
     });
 
@@ -60,31 +78,44 @@ export function SignInForm({ locationOptions }: SignInFormProps) {
   }
 
   const isAdmin = audience === "ADMIN";
+  const canToggleAudience = !forceAudience;
+  const lockedLocationOption = effectiveLocationSlug
+    ? locationOptions.find((option) => option.slug === effectiveLocationSlug)
+    : null;
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-      <div className="rounded-xl bg-slate-100 p-1 text-sm font-medium text-slate-600">
-        <div className="grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            onClick={() => setAudience("ADMIN")}
-            className={`rounded-lg px-3 py-2 transition ${
-              isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
-            }`}
-          >
-            管理者ログイン
-          </button>
-          <button
-            type="button"
-            onClick={() => setAudience("CUSTOMER")}
-            className={`rounded-lg px-3 py-2 transition ${
-              !isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
-            }`}
-          >
-            お客様ログイン
-          </button>
+      {canToggleAudience ? (
+        <div className="rounded-xl bg-slate-100 p-1 text-sm font-medium text-slate-600">
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => setAudience("ADMIN")}
+              className={`rounded-lg px-3 py-2 transition ${
+                isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
+              }`}
+            >
+              管理者ログイン
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudience("CUSTOMER")}
+              className={`rounded-lg px-3 py-2 transition ${
+                !isAdmin ? "bg-white text-slate-900 shadow" : "hover:bg-white/70"
+              }`}
+            >
+              お客様ログイン
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <input type="hidden" name="audience" value={audience} />
+          <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+            {audience === "ADMIN" ? "管理者ログイン" : "お客様ログイン"}
+          </div>
+        </>
+      )}
       <div className="space-y-2">
         <label htmlFor="email" className="block text-sm font-medium text-slate-700">
           メールアドレス
@@ -119,12 +150,19 @@ export function SignInForm({ locationOptions }: SignInFormProps) {
         <label htmlFor="locationSlug" className="block text-sm font-medium text-slate-700">
           ご利用店舗
         </label>
-        {locationOptions.length > 0 ? (
+        {lockLocation && lockedLocationOption ? (
+          <>
+            <input type="hidden" name="locationSlug" value={lockedLocationOption.slug} />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {lockedLocationOption.label}
+            </div>
+          </>
+        ) : locationOptions.length > 0 ? (
           <select
             id="locationSlug"
             name="locationSlug"
-            required={isAdmin}
-            defaultValue=""
+            required={isAdmin || Boolean(forceAudience)}
+            defaultValue={effectiveLocationSlug ?? ""}
             className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="" disabled>
@@ -142,9 +180,11 @@ export function SignInForm({ locationOptions }: SignInFormProps) {
           </div>
         )}
         <p className="text-xs text-slate-500">
-          {isAdmin
+          {audience === "ADMIN"
             ? "管理者ログインでは操作する店舗を必ず選択してください。"
-            : "お客様は初回登録時にご利用店舗を選択してください。変更したい場合もこちらから選択できます。"}
+            : lockLocation
+              ? "こちらの店舗専用のログインです。指定された店舗以外ではご利用いただけません。"
+              : "お客様は初回登録時にご利用店舗を選択してください。変更したい場合もこちらから選択できます。"}
         </p>
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}

@@ -90,6 +90,8 @@ export async function ensureDemoTenantData(tenantId: string) {
     select: { demoBootstrappedAt: true },
   });
 
+  const locations = await ensureLocations(tenantId);
+
   if (tenant?.demoBootstrappedAt) {
     return;
   }
@@ -122,7 +124,6 @@ export async function ensureDemoTenantData(tenantId: string) {
     return;
   }
 
-  const locations = await ensureLocations(tenantId);
   const trainers = await ensureTrainers(tenantId, locations);
   await ensurePlans(tenantId);
   await ensureShifts(tenantId, trainers, locations);

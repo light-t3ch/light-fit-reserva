@@ -26,7 +26,7 @@ const ERROR_CODES: Record<string, string> = {
   CHECKOUT_METADATA_INCOMPLETE: "metadata",
 };
 
-export async function startPlanCheckout(_: unknown, formData: FormData) {
+export async function startPlanCheckout(formData: FormData) {
   const planSlug = formData.get("plan")?.toString();
 
   if (!planSlug) {

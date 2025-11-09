@@ -104,6 +104,7 @@ app/
 - For one-time add-on credits (special current-month extra), create one-time Prices in Stripe and mark plan type as `ONE_TIME`.
 - Webhook events handled: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`, `payment_intent.succeeded`.
 - Map Stripe price IDs to `PlanCatalog` entries via metadata.
+- Persist processed event IDs in `StripeEventLog` to guarantee idempotent webhook handling.
 
 ## 9. Scheduling & Shifts
 - Admin UI allows monthly schedule input per trainer. Use a grid with days vs. time slots, supporting copy/paste of weekly templates.

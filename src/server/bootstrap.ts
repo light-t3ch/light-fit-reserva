@@ -3,18 +3,10 @@ import { addDays, addMinutes, addMonths, endOfMonth, set, startOfDay, startOfMon
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { LOCATION_SEEDS } from "@/server/location-seeds";
+import { getPlanDefinition, resolvePlanSeeds } from "@/server/plan-catalog";
 
-const LOCATION_SEEDS = [
-  { slug: "noda-hanshin", name: "野田阪神店", timezone: "Asia/Tokyo", address: "大阪市福島区海老江" },
-  { slug: "fukushima", name: "福島店", timezone: "Asia/Tokyo", address: "大阪市福島区福島" },
-  { slug: "awaza", name: "阿波座店", timezone: "Asia/Tokyo", address: "大阪市西区阿波座" },
-  { slug: "ebie", name: "海老江店", timezone: "Asia/Tokyo", address: "大阪市福島区海老江" },
-  { slug: "kujo", name: "九条店", timezone: "Asia/Tokyo", address: "大阪市西区九条" },
-  { slug: "higobashi", name: "肥後橋店", timezone: "Asia/Tokyo", address: "大阪市西区江戸堀" },
-  { slug: "tsukamoto", name: "塚本店", timezone: "Asia/Tokyo", address: "大阪市淀川区塚本" },
-  { slug: "temma", name: "天満店", timezone: "Asia/Tokyo", address: "大阪市北区天神橋" },
-  { slug: "tamatsukuri", name: "玉造店", timezone: "Asia/Tokyo", address: "大阪市中央区玉造" },
-];
+const PLAN_SEEDS = resolvePlanSeeds();
 
 const TRAINER_SEEDS = [
   {
@@ -31,47 +23,6 @@ const TRAINER_SEEDS = [
   },
 ];
 
-const PLAN_SEEDS = [
-  {
-    slug: "pt-55-monthly-4",
-    name: "55分 × 4回 / 月",
-    category: "SUBSCRIPTION" as const,
-    sessionCategory: "PT_55" as const,
-    durationMinutes: 55,
-    billingCadence: "MONTHLY" as const,
-    baseCredits: 4,
-    stripePriceId: "price_pt55_monthly4",
-    allocations: [
-      { bucket: "CURRENT" as const, creditType: "PT_55" as const, quantity: 4 },
-      { bucket: "NEXT" as const, creditType: "PT_55" as const, quantity: 4, effectiveDay: 22 },
-    ],
-  },
-  {
-    slug: "pt-25-monthly-4",
-    name: "25分 × 4回 / 月",
-    category: "SUBSCRIPTION" as const,
-    sessionCategory: "PT_25" as const,
-    durationMinutes: 25,
-    billingCadence: "MONTHLY" as const,
-    baseCredits: 4,
-    stripePriceId: "price_pt25_monthly4",
-    allocations: [
-      { bucket: "CURRENT" as const, creditType: "PT_25" as const, quantity: 4 },
-      { bucket: "NEXT" as const, creditType: "PT_25" as const, quantity: 4, effectiveDay: 22 },
-    ],
-  },
-  {
-    slug: "counseling-once",
-    name: "無料カウンセリング35分 × 1回",
-    category: "TRIAL" as const,
-    sessionCategory: "COUNSELING" as const,
-    durationMinutes: 35,
-    billingCadence: "ONE_TIME" as const,
-    baseCredits: 1,
-    stripePriceId: "price_counseling_once",
-    allocations: [{ bucket: "IMMEDIATE" as const, creditType: "COUNSELING" as const, quantity: 1 }],
-  },
-];
 
 const SLOT_PATTERN_MINUTES = [55, 25];
 
@@ -229,20 +180,13 @@ async function ensureTrainers(tenantId: string, locations: LocationMap) {
 
 async function ensurePlans(tenantId: string) {
   for (const seed of PLAN_SEEDS) {
-    const existing = await prisma.plan.findUnique({ where: { slug: seed.slug } });
-    if (existing) {
-      if (!existing.tenantId) {
-        await prisma.plan.update({ where: { id: existing.id }, data: { tenantId } });
-      }
-      continue;
-    }
-
-    await prisma.plan.create({
-      data: {
+    await prisma.plan.upsert({
+      where: { slug: seed.slug },
+      create: {
         tenantId,
         name: seed.name,
         slug: seed.slug,
-        description: seed.name,
+        description: seed.description ?? seed.name,
         category: seed.category,
         sessionCategory: seed.sessionCategory,
         durationMinutes: seed.durationMinutes,
@@ -250,19 +194,32 @@ async function ensurePlans(tenantId: string) {
         baseCredits: seed.baseCredits,
         stripePriceId: seed.stripePriceId,
         allocations: {
-          create: seed.allocations.map((allocation) => {
-            const baseAllocation = {
-              bucket: allocation.bucket,
-              creditType: allocation.creditType,
-              quantity: allocation.quantity,
-            };
-
-            if ("effectiveDay" in allocation && allocation.effectiveDay !== undefined) {
-              return { ...baseAllocation, effectiveDay: allocation.effectiveDay };
-            }
-
-            return baseAllocation;
-          }),
+          create: seed.allocations.map((allocation) => ({
+            bucket: allocation.bucket,
+            creditType: allocation.creditType,
+            quantity: allocation.quantity,
+            effectiveDay: allocation.effectiveDay,
+          })),
+        },
+      },
+      update: {
+        tenantId,
+        name: seed.name,
+        description: seed.description ?? seed.name,
+        category: seed.category,
+        sessionCategory: seed.sessionCategory,
+        durationMinutes: seed.durationMinutes,
+        billingCadence: seed.billingCadence,
+        baseCredits: seed.baseCredits,
+        stripePriceId: seed.stripePriceId,
+        allocations: {
+          deleteMany: {},
+          create: seed.allocations.map((allocation) => ({
+            bucket: allocation.bucket,
+            creditType: allocation.creditType,
+            quantity: allocation.quantity,
+            effectiveDay: allocation.effectiveDay,
+          })),
         },
       },
     });

@@ -98,6 +98,12 @@ export default async function CustomerPortalPage({ searchParams }: PageProps) {
             >
               予約画面へ進む
             </Link>
+            <Link
+              href="/portal/plans"
+              className="inline-flex items-center justify-center rounded-full border border-brand-200 bg-white px-6 py-3 text-sm font-semibold text-brand-600 transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              チケットを購入
+            </Link>
           </div>
         </header>
         <BookingSummary userId={userId} />

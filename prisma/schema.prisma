@@ -230,6 +230,9 @@ model PlanPurchase {
   nextBillingAt        DateTime?
   stripeSubscriptionId String?
   stripePriceId        String?
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String?
+  stripeInvoiceId         String?
   metadata             Json?
   tenant               Tenant                @relation(fields: [tenantId], references: [id])
   customer             Customer              @relation(fields: [customerId], references: [id])
@@ -357,4 +360,10 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model StripeEventLog {
+  id        String   @id
+  type      String
+  createdAt DateTime @default(now())
 }

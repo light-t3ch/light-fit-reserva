@@ -30,6 +30,16 @@ Prisma のデータソースには `directUrl` を指定しており、実行時
 
 Supabase / Stripe / NextAuth など外部サービスの接続情報はダミー値のままでは動作しないため、開発環境ごとに適切な値へ置き換えてください。
 
+### Stripe 設定
+
+チケット・サブスクの購入には Stripe を使用します。以下を設定してください。
+
+1. 各プランに対応する Price を Stripe ダッシュボードで作成し、`.env` / Vercel の Environment Variables に `STRIPE_PRICE_...` の値を登録します。対応するキーは [.env.example](.env.example) に列挙しています。
+2. `STRIPE_SECRET_KEY` と `STRIPE_WEBHOOK_SECRET` を設定します。
+3. Stripe Webhook を `https://{YOUR_DOMAIN}/api/stripe/webhook` に向け、`checkout.session.completed` / `invoice.paid` / `customer.subscription.updated` / `customer.subscription.deleted` のイベントを購読します。
+
+これにより、お客様ポータルの「チケットを購入」画面（`/portal/plans`）から Checkout を開始し、決済完了後にクレジットが自動付与されます。
+
 ## 開発サーバーの起動
 
 ```bash
@@ -40,6 +50,7 @@ npm run dev
 - `http://localhost:3000/bookings` : 予約カレンダー UI モック
 - `http://localhost:3000/dashboard` : 管理ダッシュボード UI モック
 - `http://localhost:3000/auth/sign-in` : NextAuth カスタムサインインページ
+- `http://localhost:3000/portal/plans` : Stripe 決済によるプラン購入画面
 
 ## Prisma スキーマ
 

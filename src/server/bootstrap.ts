@@ -144,47 +144,51 @@ export async function ensureLocations(tenantId: string): Promise<LocationMap> {
   const bySlug = new Map(existing.map((location) => [location.slug, location] as const));
   const byName = new Map(existing.map((location) => [location.name, location] as const));
 
-  const ensured = await Promise.all(
-    LOCATION_SEEDS.map(async (seed) => {
-      const matchBySlug = bySlug.get(seed.slug);
-      if (matchBySlug) {
-        if (
-          matchBySlug.name !== seed.name ||
-          matchBySlug.timezone !== seed.timezone ||
-          matchBySlug.address !== seed.address
-        ) {
-          return prisma.location.update({
-            where: { id: matchBySlug.id },
-            data: { name: seed.name, timezone: seed.timezone, address: seed.address },
-          });
-        }
-        return matchBySlug;
-      }
+  const ensured: LocationMap = {};
 
+  for (const seed of LOCATION_SEEDS) {
+    let location = bySlug.get(seed.slug);
+
+    if (location) {
+      if (
+        location.name !== seed.name ||
+        location.timezone !== seed.timezone ||
+        location.address !== seed.address
+      ) {
+        location = await prisma.location.update({
+          where: { id: location.id },
+          data: { name: seed.name, timezone: seed.timezone, address: seed.address },
+        });
+      }
+    } else {
       const matchByName = byName.get(seed.name);
       if (matchByName) {
-        return prisma.location.update({
+        location = await prisma.location.update({
           where: { id: matchByName.id },
           data: { slug: seed.slug, timezone: seed.timezone, address: seed.address },
         });
+      } else {
+        location = await prisma.location.upsert({
+          where: { tenantId_slug: { tenantId, slug: seed.slug } },
+          update: { name: seed.name, timezone: seed.timezone, address: seed.address },
+          create: {
+            tenantId,
+            slug: seed.slug,
+            name: seed.name,
+            timezone: seed.timezone,
+            address: seed.address,
+          },
+        });
       }
+    }
 
-      return prisma.location.create({
-        data: {
-          tenantId,
-          slug: seed.slug,
-          name: seed.name,
-          timezone: seed.timezone,
-          address: seed.address,
-        },
-      });
-    }),
-  );
+    bySlug.set(location.slug, location);
+    byName.set(location.name, location);
 
-  return ensured.reduce<LocationMap>((acc, location) => {
-    acc[location.slug] = { id: location.id, name: location.name, slug: location.slug };
-    return acc;
-  }, {} as LocationMap);
+    ensured[location.slug] = { id: location.id, name: location.name, slug: location.slug };
+  }
+
+  return ensured;
 }
 
 async function ensureTrainers(tenantId: string, locations: LocationMap) {

@@ -44,6 +44,10 @@ export type PlanCatalogItem = {
     intervalCount: number | null;
     isRecurring: boolean;
   };
+  /** Stripe側で価格が取得できた場合のみtrue */
+  isPurchasable: boolean;
+  /** 管理者向けに表示するための制限理由 */
+  unavailableReason?: "MISSING_PRICE";
   behavior?: PlanBehavior;
 };
 
@@ -110,10 +114,6 @@ export async function listPlanCatalogForCustomer(
   const items: PlanCatalogItem[] = [];
 
   for (const plan of plans) {
-    if (!plan.stripePriceId) {
-      continue;
-    }
-
     const definition = getPlanDefinition(plan.slug);
 
     if (definition?.behavior?.allowedLocationSlugs?.length) {
@@ -122,7 +122,12 @@ export async function listPlanCatalogForCustomer(
       }
     }
 
+    if (!plan.stripePriceId) {
+      continue;
+    }
+
     const price = priceMap[plan.stripePriceId];
+    const isPurchasable = Boolean(price);
 
     items.push({
       id: plan.id,
@@ -144,6 +149,8 @@ export async function listPlanCatalogForCustomer(
             isRecurring: Boolean(price.recurring),
           }
         : undefined,
+      isPurchasable,
+      unavailableReason: isPurchasable ? undefined : "MISSING_PRICE",
       behavior: definition?.behavior,
     });
   }
@@ -185,6 +192,8 @@ export async function createCheckoutSessionForPlan(options: {
 
   const stripe = getStripeClient();
   const stripeCustomerId = await getOrCreateStripeCustomer(context, stripe);
+
+  await assertStripePriceExists(stripe, plan.stripePriceId);
 
   const metadata = {
     tenantId: context.tenantId,
@@ -491,6 +500,38 @@ async function fetchStripePrices(priceIds: string[]): Promise<Record<string, Str
     console.warn("Stripe client unavailable for price fetch", error);
     return {};
   }
+}
+
+async function assertStripePriceExists(stripe: Stripe, priceId: string) {
+  try {
+    await stripe.prices.retrieve(priceId, { expand: ["product"] });
+  } catch (error) {
+    if (isMissingStripePriceError(error)) {
+      throw new Error("PRICE_NOT_CONFIGURED");
+    }
+    throw error;
+  }
+}
+
+function isMissingStripePriceError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as {
+    code?: string;
+    raw?: { code?: string; param?: string };
+  } & Partial<Error>;
+
+  const code = maybeError.code ?? maybeError.raw?.code;
+  const param = maybeError.raw?.param;
+  const message = typeof maybeError.message === "string" ? maybeError.message : "";
+
+  if (code === "resource_missing" && (param === "price" || message.includes("No such price"))) {
+    return true;
+  }
+
+  return false;
 }
 
 async function applyPlanAllocations(options: {

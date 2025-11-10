@@ -24,6 +24,7 @@ const ERROR_CODES: Record<string, string> = {
   PLAN_NOT_AVAILABLE: "plan_unavailable",
   PLAN_NOT_AVAILABLE_FOR_LOCATION: "plan_location",
   CHECKOUT_METADATA_INCOMPLETE: "metadata",
+  PRICE_NOT_CONFIGURED: "price_config",
 };
 
 export async function startPlanCheckout(formData: FormData) {

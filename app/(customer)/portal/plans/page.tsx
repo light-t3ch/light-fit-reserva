@@ -15,7 +15,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function formatPrice(plan: PlanCatalogItem) {
   if (!plan.price || plan.price.amount == null || !plan.price.currency) {
-    return "Stripeで金額を表示";
+    return plan.isPurchasable ? "Stripeで金額を表示" : "オンライン決済の設定が必要です";
   }
 
   const formatter = new Intl.NumberFormat("ja-JP", {
@@ -45,6 +45,7 @@ function buildAlert(searchParams?: Record<string, string | string[]>) {
       plan_location: "ご契約店舗では購入できないプランです。",
       metadata: "決済情報の確認に失敗しました。再度お試しください。",
       checkout_unavailable: "Stripe決済の開始に失敗しました。少し時間をおいてお試しください。",
+      price_config: "決済の設定が完了していません。店舗スタッフまでお問い合わせください。",
       unknown: "購入処理でエラーが発生しました。",
     };
 
@@ -214,12 +215,24 @@ export default async function PlanStorePage({
                         )}
                       </ul>
                     </div>
-                    <button
-                      type="submit"
-                      className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                    >
-                      Stripeで購入手続きを進める
-                    </button>
+                    <div className="mt-6 space-y-3">
+                      <button
+                        type="submit"
+                        disabled={!plan.isPurchasable}
+                        className={`inline-flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                          plan.isPurchasable
+                            ? "bg-brand-600 text-white transition hover:bg-brand-500"
+                            : "cursor-not-allowed bg-slate-200 text-slate-500"
+                        }`}
+                      >
+                        {plan.isPurchasable ? "Stripeで購入手続きを進める" : "現在オンラインでは購入できません"}
+                      </button>
+                      {!plan.isPurchasable && (
+                        <p className="text-xs leading-relaxed text-slate-500">
+                          オンライン決済の設定が完了していません。店舗スタッフまでお問い合わせください。
+                        </p>
+                      )}
+                    </div>
                   </form>
                 ))}
               </div>

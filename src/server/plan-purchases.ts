@@ -36,7 +36,7 @@ export type PlanCatalogItem = {
   sessionCategory: Plan["sessionCategory"];
   durationMinutes: number;
   baseCredits: number;
-  stripePriceId: string;
+  stripePriceId: string | null;
   price?: {
     amount: number | null;
     currency: string | null;
@@ -47,7 +47,7 @@ export type PlanCatalogItem = {
   /** Stripe側で価格が取得できた場合のみtrue */
   isPurchasable: boolean;
   /** 管理者向けに表示するための制限理由 */
-  unavailableReason?: "MISSING_PRICE";
+  unavailableReason?: "MISSING_PRICE" | "PRICE_LOOKUP_FAILED";
   behavior?: PlanBehavior;
 };
 
@@ -109,7 +109,7 @@ export async function listPlanCatalogForCustomer(
     ),
   );
 
-  const priceMap = await fetchStripePrices(priceIds);
+  const { prices: priceMap, missing: missingPriceIds } = await fetchStripePrices(priceIds);
 
   const items: PlanCatalogItem[] = [];
 
@@ -122,12 +122,18 @@ export async function listPlanCatalogForCustomer(
       }
     }
 
-    if (!plan.stripePriceId) {
-      continue;
-    }
+    const priceId = plan.stripePriceId;
+    const price = priceId ? priceMap[priceId] : undefined;
+    const priceLookupFailed = priceId ? missingPriceIds.has(priceId) : false;
+    const isPurchasable = Boolean(price) && !priceLookupFailed;
 
-    const price = priceMap[plan.stripePriceId];
-    const isPurchasable = Boolean(price);
+    let unavailableReason: PlanCatalogItem["unavailableReason"] | undefined;
+
+    if (!priceId) {
+      unavailableReason = "MISSING_PRICE";
+    } else if (!isPurchasable) {
+      unavailableReason = "PRICE_LOOKUP_FAILED";
+    }
 
     items.push({
       id: plan.id,
@@ -139,7 +145,7 @@ export async function listPlanCatalogForCustomer(
       sessionCategory: plan.sessionCategory,
       durationMinutes: plan.durationMinutes,
       baseCredits: plan.baseCredits,
-      stripePriceId: plan.stripePriceId,
+      stripePriceId: plan.stripePriceId ?? null,
       price: price
         ? {
             amount: price.unit_amount ?? null,
@@ -150,7 +156,7 @@ export async function listPlanCatalogForCustomer(
           }
         : undefined,
       isPurchasable,
-      unavailableReason: isPurchasable ? undefined : "MISSING_PRICE",
+      unavailableReason,
       behavior: definition?.behavior,
     });
   }
@@ -178,8 +184,14 @@ export async function createCheckoutSessionForPlan(options: {
     where: { tenantId: context.tenantId, slug: planSlug, isActive: true },
   });
 
-  if (!plan || !plan.stripePriceId) {
+  if (!plan) {
     throw new Error("PLAN_NOT_AVAILABLE");
+  }
+
+  const priceId = plan.stripePriceId;
+
+  if (!priceId) {
+    throw new Error("PRICE_NOT_CONFIGURED");
   }
 
   const definition = getPlanDefinition(plan.slug);
@@ -193,7 +205,7 @@ export async function createCheckoutSessionForPlan(options: {
   const stripe = getStripeClient();
   const stripeCustomerId = await getOrCreateStripeCustomer(context, stripe);
 
-  await assertStripePriceExists(stripe, plan.stripePriceId);
+  await assertStripePriceExists(stripe, priceId);
 
   const metadata = {
     tenantId: context.tenantId,
@@ -205,7 +217,7 @@ export async function createCheckoutSessionForPlan(options: {
     planCategory: plan.category,
     billingCadence: plan.billingCadence,
     userId,
-    priceId: plan.stripePriceId,
+    priceId,
   } satisfies Record<string, string>;
 
   const mode: Stripe.Checkout.SessionCreateParams.Mode =
@@ -473,9 +485,13 @@ async function getOrCreateStripeCustomer(context: CustomerContext, stripe: Strip
   return customer.id;
 }
 
-async function fetchStripePrices(priceIds: string[]): Promise<Record<string, Stripe.Price>> {
+async function fetchStripePrices(
+  priceIds: string[],
+): Promise<{ prices: Record<string, Stripe.Price>; missing: Set<string> }> {
+  const missing = new Set<string>();
+
   if (priceIds.length === 0) {
-    return {};
+    return { prices: {}, missing };
   }
 
   try {
@@ -488,17 +504,19 @@ async function fetchStripePrices(priceIds: string[]): Promise<Record<string, Str
           const price = await stripe.prices.retrieve(priceId, { expand: ["product"] });
           map[price.id] = price;
         } catch (error) {
+          missing.add(priceId);
           // eslint-disable-next-line no-console
           console.warn("Failed to retrieve Stripe price", priceId, error);
         }
       }),
     );
 
-    return map;
+    return { prices: map, missing };
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn("Stripe client unavailable for price fetch", error);
-    return {};
+    priceIds.forEach((priceId) => missing.add(priceId));
+    return { prices: {}, missing };
   }
 }
 
@@ -507,7 +525,7 @@ async function assertStripePriceExists(stripe: Stripe, priceId: string) {
     await stripe.prices.retrieve(priceId, { expand: ["product"] });
   } catch (error) {
     if (isMissingStripePriceError(error)) {
-      throw new Error("PRICE_NOT_CONFIGURED");
+      throw new Error("PRICE_LOOKUP_FAILED");
     }
     throw error;
   }

@@ -34,9 +34,9 @@ Supabase / Stripe / NextAuth など外部サービスの接続情報はダミー
 
 チケット・サブスクの購入には Stripe を使用します。以下を設定してください。
 
-1. 各プランに対応する Price を Stripe ダッシュボードで作成し、`.env` / Vercel の Environment Variables に `STRIPE_PRICE_...` の値を登録します。対応するキーは [.env.example](.env.example) に列挙しています。
+1. 各プランに対応する Price を Stripe ダッシュボードで作成し、`.env` / Vercel の Environment Variables に `STRIPE_PRICE_...` の値を登録します。対応するキーは [.env.example](.env.example) に列挙しています。**値には `price_xxx` 形式の Price ID を設定し、Stripe Secret Key と同じモード（テスト / 本番）で発行された ID を指定してください。**
 2. `STRIPE_SECRET_KEY` と `STRIPE_WEBHOOK_SECRET` を設定します。
-3. Stripe Webhook を `https://{YOUR_DOMAIN}/api/stripe/webhook` に向け、`checkout.session.completed` / `invoice.paid` / `customer.subscription.updated` / `customer.subscription.deleted` のイベントを購読します。
+3. Stripe Webhook を `https://{YOUR_DOMAIN}/api/stripe/webhook` に向け、`checkout.session.completed` / `invoice.paid` / `customer.subscription.updated` / `customer.subscription.deleted` のイベントを購読します。（互換用に `https://{YOUR_DOMAIN}/api/stripe-webhook` でも同じエンドポイントへ転送されます）
 
 これにより、お客様ポータルの「チケットを購入」画面（`/portal/plans`）から Checkout を開始し、決済完了後にクレジットが自動付与されます。
 

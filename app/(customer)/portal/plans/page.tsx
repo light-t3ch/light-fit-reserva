@@ -15,7 +15,15 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function formatPrice(plan: PlanCatalogItem) {
   if (!plan.price || plan.price.amount == null || !plan.price.currency) {
-    return plan.isPurchasable ? "Stripeで金額を表示" : "オンライン決済の設定が必要です";
+    if (plan.isPurchasable) {
+      return "Stripeで金額を表示";
+    }
+
+    if (plan.unavailableReason === "PRICE_LOOKUP_FAILED") {
+      return "Stripe価格IDを確認してください";
+    }
+
+    return "オンライン決済の設定が必要です";
   }
 
   const formatter = new Intl.NumberFormat("ja-JP", {
@@ -46,6 +54,8 @@ function buildAlert(searchParams?: Record<string, string | string[]>) {
       metadata: "決済情報の確認に失敗しました。再度お試しください。",
       checkout_unavailable: "Stripe決済の開始に失敗しました。少し時間をおいてお試しください。",
       price_config: "決済の設定が完了していません。店舗スタッフまでお問い合わせください。",
+      price_lookup:
+        "Stripeの価格IDが確認できませんでした。Price ID とシークレットキーのモード（テスト／本番）が一致しているかご確認ください。",
       unknown: "購入処理でエラーが発生しました。",
     };
 
@@ -229,7 +239,9 @@ export default async function PlanStorePage({
                       </button>
                       {!plan.isPurchasable && (
                         <p className="text-xs leading-relaxed text-slate-500">
-                          オンライン決済の設定が完了していません。店舗スタッフまでお問い合わせください。
+                          {plan.unavailableReason === "PRICE_LOOKUP_FAILED"
+                            ? "Stripeの価格IDが見つかりませんでした。Price ID が存在し、シークレットキーと同じテスト／本番モードかご確認ください。"
+                            : "オンライン決済の設定が完了していません。店舗スタッフまでお問い合わせください。"}
                         </p>
                       )}
                     </div>

@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 
 import { getServerAuthSession } from "@/lib/auth";
 import { createCheckoutSessionForPlan } from "@/server/plan-purchases";
@@ -60,6 +61,10 @@ export async function startPlanCheckout(formData: FormData) {
 
     redirect(checkout.url);
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
     const message = (error as Error).message;
     const normalizedMessage =
       message && message.toLowerCase().includes("no such price") ? "PRICE_LOOKUP_FAILED" : message;

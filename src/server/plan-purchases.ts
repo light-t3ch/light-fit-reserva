@@ -37,6 +37,7 @@ export type PlanCatalogItem = {
   durationMinutes: number;
   baseCredits: number;
   stripePriceId: string | null;
+  stripePriceEnv?: string | null;
   price?: {
     amount: number | null;
     currency: string | null;
@@ -146,6 +147,7 @@ export async function listPlanCatalogForCustomer(
       durationMinutes: plan.durationMinutes,
       baseCredits: plan.baseCredits,
       stripePriceId: plan.stripePriceId ?? null,
+      stripePriceEnv: definition?.stripePriceEnv ?? null,
       price: price
         ? {
             amount: price.unit_amount ?? null,

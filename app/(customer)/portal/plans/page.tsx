@@ -42,11 +42,16 @@ function formatPrice(plan: PlanCatalogItem) {
   return base;
 }
 
-function buildAlert(searchParams?: Record<string, string | string[]>) {
+function buildAlert(
+  searchParams: Record<string, string | string[]>,
+  plans: PlanCatalogItem[],
+) {
   const errorKey = typeof searchParams?.error === "string" ? searchParams.error : undefined;
+  const planSlug = typeof searchParams?.plan === "string" ? searchParams.plan : undefined;
+  const plan = planSlug ? plans.find((item) => item.slug === planSlug) : undefined;
 
   if (errorKey) {
-    const messages: Record<string, string> = {
+    const baseMessages: Record<string, string> = {
       plan_required: "プランが選択されていません。",
       customer_missing: "お客様情報を確認できませんでした。店舗にお問い合わせください。",
       plan_unavailable: "現在購入できないプランです。",
@@ -54,14 +59,37 @@ function buildAlert(searchParams?: Record<string, string | string[]>) {
       metadata: "決済情報の確認に失敗しました。再度お試しください。",
       checkout_unavailable: "Stripe決済の開始に失敗しました。少し時間をおいてお試しください。",
       price_config: "決済の設定が完了していません。店舗スタッフまでお問い合わせください。",
-      price_lookup:
-        "Stripeの価格IDが確認できませんでした。Price ID とシークレットキーのモード（テスト／本番）が一致しているかご確認ください。",
+      price_lookup: "Stripeの価格IDが確認できませんでした。設定内容をご確認ください。",
       unknown: "購入処理でエラーが発生しました。",
     };
 
+    let message = baseMessages[errorKey] ?? baseMessages.unknown;
+
+    if (errorKey === "price_lookup") {
+      const details: string[] = [];
+
+      if (plan) {
+        details.push(`${plan.name}に設定された Stripe Price ID (${plan.stripePriceId ?? "未設定"}) を確認してください。`);
+
+        if (plan.stripePriceEnv) {
+          details.push(
+            `Vercelの環境変数 ${plan.stripePriceEnv} に Stripe ダッシュボードの Price ID を設定し、Stripeのシークレットキーと同じテスト／本番モードになっているかを確認してください。`,
+          );
+        } else {
+          details.push("Stripeの価格設定が未登録のプランです。店舗スタッフまでお問い合わせください。");
+        }
+      } else {
+        details.push(
+          "StripeのPrice IDが存在し、Stripeのシークレットキーと同じテスト／本番モードで発行されているかをご確認ください。",
+        );
+      }
+
+      message = `${baseMessages.price_lookup} ${details.join(" ")}`.trim();
+    }
+
     return {
       tone: "error" as const,
-      message: messages[errorKey] ?? messages.unknown,
+      message,
     };
   }
 
@@ -111,7 +139,9 @@ export default async function PlanStorePage({
     );
   }
 
-  const alert = buildAlert(searchParams ?? {});
+  const alert = buildAlert(searchParams ?? {}, plans);
+  const highlightedPlanSlug =
+    typeof searchParams?.plan === "string" ? searchParams.plan : undefined;
 
   const grouped = plans.reduce<Record<string, PlanCatalogItem[]>>((acc, plan) => {
     if (!acc[plan.category]) {
@@ -243,6 +273,17 @@ export default async function PlanStorePage({
                             ? "Stripeの価格IDが見つかりませんでした。Price ID が存在し、シークレットキーと同じテスト／本番モードかご確認ください。"
                             : "オンライン決済の設定が完了していません。店舗スタッフまでお問い合わせください。"}
                         </p>
+                      )}
+                      {highlightedPlanSlug === plan.slug && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                          <p>
+                            Stripe Price ID: {plan.stripePriceId ?? "未設定"}
+                            {plan.stripePriceEnv ? `（環境変数: ${plan.stripePriceEnv}）` : ""}
+                          </p>
+                          <p className="mt-1 leading-relaxed">
+                            Stripeダッシュボードで対象のPrice IDが存在し、Vercelの環境変数に正しく設定されているか、シークレットキーと同じテスト／本番モードかをご確認ください。
+                          </p>
+                        </div>
                       )}
                     </div>
                   </form>

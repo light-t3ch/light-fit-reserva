@@ -73,11 +73,15 @@ function buildAlert(
 
         if (plan.stripePriceEnv) {
           details.push(
-            `Vercelの環境変数 ${plan.stripePriceEnv} に Stripe ダッシュボードの Price ID を設定し、Stripeのシークレットキーと同じテスト／本番モードになっているかを確認してください。`,
+            `Vercelの環境変数 ${plan.stripePriceEnv} に Price ID を登録し、「Production」「Preview」など対象の環境にも同じ値が入っているかを確認してください。`,
           );
         } else {
           details.push("Stripeの価格設定が未登録のプランです。店舗スタッフまでお問い合わせください。");
         }
+
+        details.push(
+          "環境変数を変更した場合は再デプロイしてから管理者アカウントで再ログインし、プラン情報が最新値に同期されたか（Planテーブルの stripePriceId が埋まっているか）を確認してください。",
+        );
       } else {
         details.push(
           "StripeのPrice IDが存在し、Stripeのシークレットキーと同じテスト／本番モードで発行されているかをご確認ください。",
@@ -280,9 +284,11 @@ export default async function PlanStorePage({
                             Stripe Price ID: {plan.stripePriceId ?? "未設定"}
                             {plan.stripePriceEnv ? `（環境変数: ${plan.stripePriceEnv}）` : ""}
                           </p>
-                          <p className="mt-1 leading-relaxed">
-                            Stripeダッシュボードで対象のPrice IDが存在し、Vercelの環境変数に正しく設定されているか、シークレットキーと同じテスト／本番モードかをご確認ください。
-                          </p>
+                          <ul className="mt-2 list-disc space-y-1 pl-5">
+                            <li>Stripeダッシュボードで Price がアクティブで、シークレットキーと同じテスト／本番モードになっているか確認してください。</li>
+                            <li>Vercel の対象環境（Production / Preview など）に {plan.stripePriceEnv ?? "該当の環境変数"} が登録されているか確認してください。</li>
+                            <li>値を変更した場合は再デプロイし、管理者でログインしてプランが再同期（Plan.stripePriceId が更新）されたか確認してください。</li>
+                          </ul>
                         </div>
                       )}
                     </div>

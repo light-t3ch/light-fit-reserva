@@ -175,86 +175,108 @@ export async function createCheckoutSessionForPlan(options: {
   const successPath = options.successPath ?? "/portal/plans/success";
   const cancelPath = options.cancelPath ?? "/portal/plans";
 
-  const context = await getCustomerContextForUser(userId);
-  if (!context) {
-    throw new Error("CUSTOMER_NOT_FOUND");
-  }
-
-  const plan = await prisma.plan.findFirst({
-    where: { tenantId: context.tenantId, slug: planSlug, isActive: true },
-  });
-
-  if (!plan) {
-    throw new Error("PLAN_NOT_AVAILABLE");
-  }
-
-  const priceId = plan.stripePriceId;
-
-  if (!priceId) {
-    throw new Error("PRICE_NOT_CONFIGURED");
-  }
-
-  const definition = getPlanDefinition(plan.slug);
-
-  if (definition?.behavior?.allowedLocationSlugs?.length) {
-    if (!definition.behavior.allowedLocationSlugs.includes(context.locationSlug)) {
-      throw new Error("PLAN_NOT_AVAILABLE_FOR_LOCATION");
+  try {
+    const context = await getCustomerContextForUser(userId);
+    if (!context) {
+      throw new Error("CUSTOMER_NOT_FOUND");
     }
+
+    const plan = await prisma.plan.findFirst({
+      where: { tenantId: context.tenantId, slug: planSlug, isActive: true },
+    });
+
+    if (!plan) {
+      throw new Error("PLAN_NOT_AVAILABLE");
+    }
+
+    const priceId = plan.stripePriceId;
+
+    if (!priceId) {
+      throw new Error("PRICE_NOT_CONFIGURED");
+    }
+
+    const definition = getPlanDefinition(plan.slug);
+
+    if (definition?.behavior?.allowedLocationSlugs?.length) {
+      if (!definition.behavior.allowedLocationSlugs.includes(context.locationSlug)) {
+        throw new Error("PLAN_NOT_AVAILABLE_FOR_LOCATION");
+      }
+    }
+
+    const stripe = getStripeClient();
+    const stripeCustomerId = await getOrCreateStripeCustomer(context, stripe);
+
+    await assertStripePriceExists(stripe, priceId);
+
+    const metadata = {
+      tenantId: context.tenantId,
+      customerId: context.id,
+      locationId: context.locationId,
+      locationSlug: context.locationSlug,
+      planId: plan.id,
+      planSlug: plan.slug,
+      planCategory: plan.category,
+      billingCadence: plan.billingCadence,
+      userId,
+      priceId,
+    } satisfies Record<string, string>;
+
+    const mode: Stripe.Checkout.SessionCreateParams.Mode =
+      plan.billingCadence === "MONTHLY" ? "subscription" : "payment";
+
+    const successUrl = new URL(successPath, ensureOrigin(origin));
+    successUrl.searchParams.set("plan", plan.slug);
+    successUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+
+    const cancelUrl = new URL(cancelPath, ensureOrigin(origin));
+    cancelUrl.searchParams.set("plan", plan.slug);
+    cancelUrl.searchParams.set("cancelled", "1");
+
+    const params: Stripe.Checkout.SessionCreateParams = {
+      customer: stripeCustomerId,
+      mode,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl.toString(),
+      cancel_url: cancelUrl.toString(),
+      client_reference_id: plan.slug,
+      metadata,
+      allow_promotion_codes: false,
+    };
+
+    if (mode === "subscription") {
+      params.subscription_data = { metadata };
+    } else {
+      params.payment_intent_data = { metadata };
+    }
+
+    const session = await stripe.checkout.sessions.create(params);
+
+    if (!session.url) {
+      return null;
+    }
+
+    return { url: session.url };
+  } catch (error) {
+    if (error instanceof Error) {
+      const knownMessages = new Set([
+        "CUSTOMER_NOT_FOUND",
+        "PLAN_NOT_AVAILABLE",
+        "PRICE_NOT_CONFIGURED",
+        "PLAN_NOT_AVAILABLE_FOR_LOCATION",
+        "PRICE_LOOKUP_FAILED",
+      ]);
+
+      if (knownMessages.has(error.message)) {
+        throw error;
+      }
+    }
+
+    if (isMissingStripePriceError(error)) {
+      throw new Error("PRICE_LOOKUP_FAILED");
+    }
+
+    throw error;
   }
-
-  const stripe = getStripeClient();
-  const stripeCustomerId = await getOrCreateStripeCustomer(context, stripe);
-
-  await assertStripePriceExists(stripe, priceId);
-
-  const metadata = {
-    tenantId: context.tenantId,
-    customerId: context.id,
-    locationId: context.locationId,
-    locationSlug: context.locationSlug,
-    planId: plan.id,
-    planSlug: plan.slug,
-    planCategory: plan.category,
-    billingCadence: plan.billingCadence,
-    userId,
-    priceId,
-  } satisfies Record<string, string>;
-
-  const mode: Stripe.Checkout.SessionCreateParams.Mode =
-    plan.billingCadence === "MONTHLY" ? "subscription" : "payment";
-
-  const successUrl = new URL(successPath, ensureOrigin(origin));
-  successUrl.searchParams.set("plan", plan.slug);
-  successUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
-
-  const cancelUrl = new URL(cancelPath, ensureOrigin(origin));
-  cancelUrl.searchParams.set("plan", plan.slug);
-  cancelUrl.searchParams.set("cancelled", "1");
-
-  const params: Stripe.Checkout.SessionCreateParams = {
-    customer: stripeCustomerId,
-    mode,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl.toString(),
-    cancel_url: cancelUrl.toString(),
-    client_reference_id: plan.slug,
-    metadata,
-    allow_promotion_codes: false,
-  };
-
-  if (mode === "subscription") {
-    params.subscription_data = { metadata };
-  } else {
-    params.payment_intent_data = { metadata };
-  }
-
-  const session = await stripe.checkout.sessions.create(params);
-
-  if (!session.url) {
-    return null;
-  }
-
-  return { url: session.url };
 }
 
 export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {

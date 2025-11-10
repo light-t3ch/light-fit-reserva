@@ -61,7 +61,10 @@ export async function startPlanCheckout(formData: FormData) {
     redirect(checkout.url);
   } catch (error) {
     const message = (error as Error).message;
-    const code = ERROR_CODES[message] ?? "unknown";
+    const normalizedMessage =
+      message && message.toLowerCase().includes("no such price") ? "PRICE_LOOKUP_FAILED" : message;
+
+    const code = ERROR_CODES[normalizedMessage] ?? "unknown";
     redirect(`/portal/plans?error=${code}`);
   }
 }

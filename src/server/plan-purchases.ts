@@ -234,7 +234,7 @@ export async function createCheckoutSessionForPlan(options: {
   const params: Stripe.Checkout.SessionCreateParams = {
     customer: stripeCustomerId,
     mode,
-    line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: successUrl.toString(),
     cancel_url: cancelUrl.toString(),
     client_reference_id: plan.slug,

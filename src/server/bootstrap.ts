@@ -43,6 +43,11 @@ export async function ensureDemoTenantData(tenantId: string) {
 
   const locations = await ensureLocations(tenantId);
 
+  // プランのStripe価格IDなどは環境変数に依存するため、
+  // デモデータの初期ブートストラップ済みかどうかに関わらず
+  // 毎回最新の定義で同期する。
+  await ensurePlans(tenantId);
+
   if (tenant?.demoBootstrappedAt) {
     return;
   }
@@ -76,7 +81,6 @@ export async function ensureDemoTenantData(tenantId: string) {
   }
 
   const trainers = await ensureTrainers(tenantId, locations);
-  await ensurePlans(tenantId);
   await ensureShifts(tenantId, trainers, locations);
   const { customer } = await ensureDemoCustomer(tenantId, locations);
   await ensureDemoPurchasesAndBookings(tenantId, customer.id, trainers, locations);

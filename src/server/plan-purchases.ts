@@ -428,11 +428,17 @@ function ensureOrigin(origin: string) {
   return `https://${origin}`;
 }
 
+function isDeletedStripeCustomer(
+  customer: Stripe.Customer | Stripe.DeletedCustomer,
+): customer is Stripe.DeletedCustomer {
+  return "deleted" in customer && customer.deleted === true;
+}
+
 async function getOrCreateStripeCustomer(context: CustomerContext, stripe: Stripe): Promise<string> {
   if (context.stripeCustomerId) {
     try {
       const existing = await stripe.customers.retrieve(context.stripeCustomerId);
-      if (!("deleted" in existing) || existing.deleted === false) {
+      if (!isDeletedStripeCustomer(existing)) {
         return context.stripeCustomerId;
       }
     } catch (error) {

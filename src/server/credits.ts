@@ -105,7 +105,7 @@ export async function expireStaleCreditsForCustomer(options: ExpirationOptions) 
 
   const adjustments: Prisma.CreditLedgerEntryCreateManyInput[] = [];
 
-  const expirationSources: { source: Prisma.CreditBucket; target: CreditBucket; memo: string }[] = [
+  const expirationSources: { source: Prisma.$Enums.CreditBucket; target: CreditBucket; memo: string }[] = [
     { source: "CURRENT", target: "CURRENT", memo: "前月残り枠の失効" },
     { source: "IMMEDIATE", target: "CURRENT", memo: "前月残り枠の失効" },
     { source: "NEXT", target: "NEXT", memo: "前月分の来月枠を失効" },

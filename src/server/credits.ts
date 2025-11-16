@@ -211,13 +211,18 @@ export async function expireStaleCreditsForCustomer(options: ExpirationOptions) 
       customerId,
       locationId,
       bucket: "NEXT",
-      occurredAt: { lt: nextMonthStart },
+      eventType: { not: "ROLLOVER" },
+      occurredAt: {
+        gte: currentMonthStart,
+        lt: nextMonthStart,
+      },
+      quantity: { gt: 0 },
     },
     _sum: { quantity: true },
   });
 
   if (maturedNextCredits.length > 0) {
-    const existingRollovers = await client.creditLedgerEntry.groupBy({
+    const rolloversThisMonth = await client.creditLedgerEntry.groupBy({
       by: ["creditType", "bucket"],
       where: {
         tenantId,
@@ -225,32 +230,22 @@ export async function expireStaleCreditsForCustomer(options: ExpirationOptions) 
         locationId,
         eventType: "ROLLOVER",
         memo: ROLLOVER_MEMO,
+        occurredAt: currentMonthStart,
       },
       _sum: { quantity: true },
     });
 
-    const existingMap = new Map<
-      string,
-      {
-        added: number;
-        removed: number;
-      }
-    >();
+    const alreadyAdded = new Map<string, number>();
+    const alreadyRemoved = new Map<string, number>();
 
-    for (const record of existingRollovers) {
-      const current = existingMap.get(record.creditType) ?? { added: 0, removed: 0 };
+    for (const record of rolloversThisMonth) {
+      const total = record._sum.quantity ?? 0;
       if (record.bucket === "CURRENT") {
-        current.added += record._sum.quantity ?? 0;
+        alreadyAdded.set(record.creditType, total);
       }
       if (record.bucket === "NEXT") {
-        const quantity = record._sum.quantity ?? 0;
-        if (quantity < 0) {
-          current.removed += Math.abs(quantity);
-        } else {
-          current.removed -= quantity;
-        }
+        alreadyRemoved.set(record.creditType, Math.abs(total));
       }
-      existingMap.set(record.creditType, current);
     }
 
     for (const group of maturedNextCredits) {
@@ -259,12 +254,11 @@ export async function expireStaleCreditsForCustomer(options: ExpirationOptions) 
         continue;
       }
 
-      const existing = existingMap.get(group.creditType) ?? { added: 0, removed: 0 };
+      const removed = alreadyRemoved.get(group.creditType) ?? 0;
+      const added = alreadyAdded.get(group.creditType) ?? 0;
 
-      const removalDelta = total - existing.removed;
-      const additionDelta = total - existing.added;
-
-      if (removalDelta !== 0) {
+      const removalDelta = total - removed;
+      if (removalDelta > 0) {
         adjustments.push({
           tenantId,
           customerId,
@@ -273,14 +267,15 @@ export async function expireStaleCreditsForCustomer(options: ExpirationOptions) 
           bookingId: null,
           bucket: "NEXT",
           creditType: group.creditType,
-          quantity: removalDelta > 0 ? -removalDelta : Math.abs(removalDelta),
+          quantity: -removalDelta,
           eventType: "ROLLOVER",
           occurredAt: currentMonthStart,
           memo: ROLLOVER_MEMO,
         });
       }
 
-      if (additionDelta !== 0) {
+      const additionDelta = total - added;
+      if (additionDelta > 0) {
         adjustments.push({
           tenantId,
           customerId,
